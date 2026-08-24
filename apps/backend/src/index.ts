@@ -12,16 +12,12 @@ export { SolveOrchestrator } from "./solve/orchestrator.js";
 export type { OrchestratorDeps } from "./solve/orchestrator.js";
 
 // Çok sağlayıcılı çözüm katmanı
-export { SolverError, toSolverError } from "./providers/types.js";
+export { SolverError, toSolverError, isAbortError } from "./providers/types.js";
 export type { CaptchaSolver, SolverErrorKind } from "./providers/types.js";
 export { TaskApiClient, TaskApiError } from "./providers/taskApiClient.js";
 export type { TaskApiClientOptions } from "./providers/taskApiClient.js";
 export { CapsolverSolver } from "./providers/capsolverSolver.js";
-export {
-  TokenProviderSolver,
-  ANTI_CAPTCHA_CONFIG,
-  TWO_CAPTCHA_CONFIG,
-} from "./providers/tokenProviderSolver.js";
+export { TokenProviderSolver, ANTI_CAPTCHA_CONFIG, TWO_CAPTCHA_CONFIG, snapMinScore } from "./providers/tokenProviderSolver.js";
 export type { TokenProviderConfig, TokenProviderOptions } from "./providers/tokenProviderSolver.js";
 export { FallbackSolver } from "./providers/fallbackSolver.js";
 export type { FallbackSolverOptions } from "./providers/fallbackSolver.js";
@@ -44,6 +40,9 @@ export type { LemonSqueezyOptions, WebhookResult } from "./payments/lemonSqueezy
 export { loadConfig } from "./config.js";
 export type { AppConfig, CapsolverConfig, LimitsConfig, BudgetConfig } from "./config.js";
 export { createPostgresDb, migrate } from "./db/index.js";
-export { createEmbeddedDb } from "./db/embedded.js";
+export { createEmbeddedDb, EMBEDDED_DB_LOCK_FILE } from "./db/embedded.js";
+export { openConfiguredDb } from "./db/open.js";
 export type { DbBundle, AppDatabase } from "./db/index.js";
+export { issueCode, IssueCodeError } from "./onboarding/issueCode.js";
+export type { IssueCodeResult } from "./onboarding/issueCode.js";
 export * as schema from "./db/schema.js";

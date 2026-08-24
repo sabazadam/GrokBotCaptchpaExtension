@@ -1,15 +1,14 @@
 import { loadConfig } from "../config.js";
-import { createPostgresDb, migrate } from "../db/index.js";
-import { createEmbeddedDb } from "../db/embedded.js";
-import { AuthService } from "../auth/deviceAuth.js";
-import { CreditStore } from "../credits/creditStore.js";
-import { buildInstallPrompt } from "../onboarding/installPrompt.js";
+import { issueCode } from "../onboarding/issueCode.js";
 
 /**
  * Operatör CLI'si: bir e-posta için kullanıcı hazırlar, opsiyonel kredi yükler,
  * tek kullanımlık aktivasyon kodu üretir ve Grok botuna yapıştırılacak talimatı yazdırır.
  *
  * Kullanım: pnpm --filter @grokbot/backend issue-code <email> [krediMiktarı]
+ *
+ * Gömülü DB tek süreçlidir. Sunucu çalışıyorsa ADMIN_TOKEN ile admin API kullanılır;
+ * aksi halde (sunucu kapalıysa) yerel dosya DB'si açılır.
  */
 async function main(): Promise<void> {
   const email = process.argv[2];
@@ -20,29 +19,14 @@ async function main(): Promise<void> {
   const credits = Number(process.argv[3] ?? 0);
 
   const config = loadConfig();
-  const bundle = config.databaseUrl
-    ? createPostgresDb(config.databaseUrl)
-    : await createEmbeddedDb(config.embeddedDataDir);
-  await migrate(bundle);
-
-  const auth = new AuthService(bundle.db);
-  const store = new CreditStore(bundle.db);
-
-  const userId = await auth.provisionUser(email);
-  if (Number.isFinite(credits) && credits > 0) {
-    await store.topUp(userId, Math.floor(credits), "cli-grant");
-  }
-  const code = await auth.issueActivationCode(userId);
-  const prompt = buildInstallPrompt({
-    activationCode: code,
-    backendUrl: config.onboarding.publicBackendUrl,
-    ...(config.onboarding.extensionUrl ? { extensionUrl: config.onboarding.extensionUrl } : {}),
-  });
+  const result = await issueCode(
+    { email, credits: Number.isFinite(credits) ? credits : 0 },
+    config,
+  );
 
   process.stdout.write(
-    `\n=== Kullanıcı ===\n${email} (${userId})\n\n=== Aktivasyon kodu ===\n${code}\n\n=== Grok botuna yapıştırılacak talimat ===\n${prompt}\n\n`,
+    `\n=== Kullanıcı ===\n${email} (${result.userId})\n\n=== Aktivasyon kodu ===\n${result.activationCode}\n\n=== Grok botuna yapıştırılacak talimat ===\n${result.installPrompt}\n\n`,
   );
-  await bundle.close();
 }
 
 main().catch((err) => {

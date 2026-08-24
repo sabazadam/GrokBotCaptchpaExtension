@@ -7,6 +7,8 @@ dağıtılacağını ve bir abonenin nasıl etkinleştirileceğini anlatır.
 
 Yerelde denemek için tek gerçek gereksinim bir **Capsolver API anahtarı** ve **Chrome**.
 `DATABASE_URL` boş bırakılırsa backend gömülü (pglite) veritabanı ile çalışır.
+Gömülü DB **tek süreçlidir**: sunucu çalışırken `issue-code` aynı dosyayı açmaz;
+`ADMIN_TOKEN` ile admin API'ye gider. `NODE_ENV=production` iken `DATABASE_URL` zorunludur.
 
 ```bash
 pnpm install
@@ -18,8 +20,9 @@ ADMIN_TOKEN=uzun-rastgele-bir-deger \
 pnpm --filter @grokbot/backend start
 # -> http://localhost:3000 (şema açılışta otomatik kurulur)
 
-# Bir cihaz için aktivasyon kodu + kredi üret (kurulum promptunu da yazar)
+# Bir cihaz için aktivasyon kodu + kredi üret (sunucu açıkken ADMIN_TOKEN zorunlu)
 CAPSOLVER_API_KEY=gercek_capsolver_anahtarin \
+ADMIN_TOKEN=uzun-rastgele-bir-deger \
 pnpm --filter @grokbot/backend issue-code kullanici@ornek.com 100
 ```
 
@@ -27,8 +30,10 @@ Ardından Chrome'da `chrome://extensions` → "Geliştirici modu" → "Paketlenm
 ile `apps/extension/dist` klasörünü seç; eklenti popup'ında Backend URL'yi
 `http://localhost:3000` yap ve üretilen aktivasyon kodunu gir.
 
-> Not: Gömülü DB tek makine/geliştirme içindir. Üretimde `DATABASE_URL` ile gerçek
-> PostgreSQL kullanın (aşağıya bakın).
+> Not: Gömülü DB tek makine/geliştirme içindir. `NODE_ENV=production` iken sessizce
+> pglite'a düşülmez; `DATABASE_URL` ile gerçek PostgreSQL kullanın (aşağıya bakın).
+> LAN üzerinde HTTP kullanıyorsanız aktivasyon kodu ve cihaz token'ı düz metindir —
+> yalnızca güvendiğiniz ağda `HOST=0.0.0.0` açın.
 
 ## 1. Backend'i çalıştır (üretim / gerçek Postgres)
 
@@ -36,9 +41,10 @@ Gereken ortam değişkenleri için `apps/backend/.env.example` dosyasına bakın
 
 ```bash
 CAPSOLVER_API_KEY=...         # yalnızca backend'de; ASLA eklentiye konmaz
-DATABASE_URL=postgres://...   # gerçek PostgreSQL (boşsa gömülü pglite kullanılır)
-ADMIN_TOKEN=...               # admin uçlarını korur (aktivasyon kodu üretimi)
+DATABASE_URL=postgres://...   # üretimde zorunlu (NODE_ENV=production)
+ADMIN_TOKEN=...               # admin uçlarını korur (aktivasyon kodu üretimi); issue-code için de gerekir
 PUBLIC_BACKEND_URL=https://api.senin-alan-adin.com
+# HOST=127.0.0.1              # yalnızca bu makine; LAN için 0.0.0.0 (varsayılan)
 # Opsiyonel fallback sağlayıcılar:
 # ANTICAPTCHA_API_KEY=...     # 2. sağlayıcı
 # TWOCAPTCHA_API_KEY=...      # 3. sağlayıcı

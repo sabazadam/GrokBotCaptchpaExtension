@@ -25,6 +25,9 @@ pnpm-debug.log*
 # test / coverage
 coverage/
 
+# local embedded pglite data (may contain emails, token hashes, balances)
+.data/
+
 # extension build artifacts
 apps/extension/.output/
 apps/extension/.wxt/

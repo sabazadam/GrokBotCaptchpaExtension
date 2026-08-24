@@ -28,6 +28,10 @@ export async function handleMessage(
     };
   }
 
+  if (msg.kind !== "solve") {
+    return { status: "error", code: "invalid_params", message: "Bilinmeyen mesaj" };
+  }
+
   if (!settings.enabled) {
     return { status: "error", code: "unauthorized", message: "Eklenti devre dışı" };
   }

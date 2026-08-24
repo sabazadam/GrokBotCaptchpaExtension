@@ -4,6 +4,7 @@ export interface DetectedCaptcha {
   type: CaptchaTypeId;
   websiteKey?: string;
   pageAction?: string;
+  turnstileAction?: string;
 }
 
 function parseParam(src: string, param: string): string | undefined {
@@ -37,7 +38,7 @@ export function detectCaptchas(doc: Document): DetectedCaptcha[] {
     add({
       type: "turnstile",
       ...(key ? { websiteKey: key } : {}),
-      ...(action ? { pageAction: action } : {}),
+      ...(action ? { turnstileAction: action } : {}),
     });
   });
 
@@ -60,18 +61,33 @@ export function detectCaptchas(doc: Document): DetectedCaptcha[] {
   doc.querySelectorAll('script[src*="recaptcha/api.js"]').forEach((el) => {
     const render = parseParam(el.getAttribute("src") ?? "", "render");
     if (render && render !== "explicit") {
-      add({ type: "recaptcha_v3", websiteKey: render, pageAction: "submit" });
+      add({ type: "recaptcha_v3", websiteKey: render });
     }
   });
 
   return found;
 }
 
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return url.slice(0, 128);
+  }
+}
+
 export function toSolveRequest(c: DetectedCaptcha, websiteURL: string): SolveRequest {
+  const turnstileAction =
+    c.turnstileAction ?? (c.type === "turnstile" ? c.pageAction : undefined);
+  const pageAction = c.type === "turnstile" ? undefined : c.pageAction;
+  // Aynı widget için sabit anahtar: yanıt kaybolursa ikinci istek yeniden ücretlenmez.
+  const idempotencyKey = `${originOf(websiteURL)}:${c.type}:${c.websiteKey ?? ""}`.slice(0, 256);
   return {
     captchaType: c.type,
     websiteURL,
     ...(c.websiteKey ? { websiteKey: c.websiteKey } : {}),
-    ...(c.pageAction ? { pageAction: c.pageAction } : {}),
+    ...(pageAction ? { pageAction } : {}),
+    ...(turnstileAction ? { turnstileAction } : {}),
+    idempotencyKey,
   };
 }
