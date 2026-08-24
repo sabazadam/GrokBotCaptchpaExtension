@@ -16,12 +16,33 @@ export interface BudgetConfig {
   maxSpend: number;
 }
 
+export interface LemonSqueezyConfig {
+  signingSecret: string;
+  variantCredits: Record<string, number>;
+}
+
 export interface AppConfig {
   capsolver: CapsolverConfig;
   databaseUrl: string;
   port: number;
   limits: LimitsConfig;
   budget: BudgetConfig;
+  lemonSqueezy?: LemonSqueezyConfig;
+}
+
+function parseVariantCredits(value: string | undefined): Record<string, number> {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      const n = Number(v);
+      if (Number.isFinite(n)) out[k] = n;
+    }
+    return out;
+  } catch {
+    return {};
+  }
 }
 
 function optionalInt(value: string | undefined): number | undefined {
@@ -52,7 +73,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const timeoutMs = optionalInt(env["CAPSOLVER_TIMEOUT_MS"]);
   if (timeoutMs !== undefined) capsolver.timeoutMs = timeoutMs;
 
-  return {
+  const config: AppConfig = {
     capsolver,
     databaseUrl,
     port: intOr(env["PORT"], 3000),
@@ -66,4 +87,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       maxSpend: intOr(env["BUDGET_MAX_SPEND"], 10_000),
     },
   };
+
+  const signingSecret = env["LEMONSQUEEZY_SIGNING_SECRET"];
+  if (signingSecret) {
+    config.lemonSqueezy = {
+      signingSecret,
+      variantCredits: parseVariantCredits(env["LEMONSQUEEZY_VARIANT_CREDITS"]),
+    };
+  }
+
+  return config;
 }

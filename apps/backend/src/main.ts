@@ -6,6 +6,7 @@ import { UserLimiter } from "./limits/rateLimiter.js";
 import { BudgetCircuitBreaker } from "./limits/budgetBreaker.js";
 import { CapsolverClient } from "./capsolver/client.js";
 import { SolveOrchestrator } from "./solve/orchestrator.js";
+import { LemonSqueezyWebhookService } from "./payments/lemonSqueezy.js";
 import { buildApp } from "./http/app.js";
 
 async function main(): Promise<void> {
@@ -40,7 +41,20 @@ async function main(): Promise<void> {
     },
   });
 
-  const app = buildApp({ auth, credits, orchestrator, logger: true });
+  const lemonSqueezy = config.lemonSqueezy
+    ? new LemonSqueezyWebhookService(bundle.db, credits, auth, {
+        signingSecret: config.lemonSqueezy.signingSecret,
+        variantCredits: config.lemonSqueezy.variantCredits,
+      })
+    : undefined;
+
+  const app = buildApp({
+    auth,
+    credits,
+    orchestrator,
+    ...(lemonSqueezy ? { lemonSqueezy } : {}),
+    logger: true,
+  });
 
   const shutdown = async (): Promise<void> => {
     await app.close();

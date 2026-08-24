@@ -4,12 +4,14 @@ import type { AuthService, AuthedDevice } from "../auth/deviceAuth.js";
 import { AuthError } from "../auth/deviceAuth.js";
 import type { CreditStore } from "../credits/creditStore.js";
 import type { SolveOrchestrator } from "../solve/orchestrator.js";
+import type { LemonSqueezyWebhookService } from "../payments/lemonSqueezy.js";
 import { activateRequestSchema, solveRequestSchema } from "./schemas.js";
 
 export interface AppDeps {
   auth: AuthService;
   credits: CreditStore;
   orchestrator: SolveOrchestrator;
+  lemonSqueezy?: LemonSqueezyWebhookService;
   logger?: boolean;
 }
 
@@ -47,6 +49,24 @@ function getBearer(req: FastifyRequest): string | null {
 
 export function buildApp(deps: AppDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false });
+
+  // Ham gövdeyi de sakla (webhook imza doğrulaması için), JSON'u da ayrıştır.
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "buffer" },
+    (req, body, done) => {
+      (req as unknown as { rawBody?: Buffer }).rawBody = body as Buffer;
+      if ((body as Buffer).length === 0) {
+        done(null, undefined);
+        return;
+      }
+      try {
+        done(null, JSON.parse((body as Buffer).toString("utf8")));
+      } catch (err) {
+        done(err as Error);
+      }
+    },
+  );
 
   async function requireAuth(
     req: FastifyRequest,
@@ -119,6 +139,22 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     const status = res.status === "error" ? httpStatusForCode(res.code) : 200;
     return reply.code(status).send(res);
   });
+
+  const lemonSqueezy = deps.lemonSqueezy;
+  if (lemonSqueezy) {
+    app.post("/webhooks/lemonsqueezy", async (req, reply) => {
+      const rawBody = (req as unknown as { rawBody?: Buffer }).rawBody ?? Buffer.from("");
+      const signature = req.headers["x-signature"];
+      const result = await lemonSqueezy.handle(
+        rawBody,
+        typeof signature === "string" ? signature : undefined,
+      );
+      if (!result.ok) {
+        return reply.code(400).send({ status: "error", code: result.code });
+      }
+      return reply.code(200).send({ received: true, ...result });
+    });
+  }
 
   return app;
 }

@@ -17,6 +17,8 @@ export { UserLimiter } from "./limits/rateLimiter.js";
 export { BudgetCircuitBreaker } from "./limits/budgetBreaker.js";
 export { buildApp, httpStatusForCode } from "./http/app.js";
 export type { AppDeps } from "./http/app.js";
+export { LemonSqueezyWebhookService } from "./payments/lemonSqueezy.js";
+export type { LemonSqueezyOptions, WebhookResult } from "./payments/lemonSqueezy.js";
 export { loadConfig } from "./config.js";
 export type { AppConfig, CapsolverConfig, LimitsConfig, BudgetConfig } from "./config.js";
 export { createPostgresDb, migrate } from "./db/index.js";
