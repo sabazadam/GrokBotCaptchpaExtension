@@ -255,6 +255,39 @@ CAPTCHA'lar (oturum düşmesi/yeniden giriş) otomatik yakalanır.
 4. GeeTest, AWS WAF
 5. Cloudflare Challenge / DataDome (proxy modeli — Faz 2)
 
+## 11.5. Çok Sağlayıcılı (Hybrid) Çözüm Katmanı
+
+CAPTCHA çözümü tek bir sağlayıcıya bağlı değildir; öncelik sırasıyla denenen bir
+sağlayıcı zinciri kullanılır:
+
+1. **Capsolver** (birincil — en hızlı ve en ucuz; tüm türleri destekler)
+2. **Anti-Captcha** (fallback 1 — reCAPTCHA v2/v3, Turnstile)
+3. **2Captcha** (fallback 2 — reCAPTCHA v2/v3, Turnstile)
+
+**Soyutlama:** Tüm sağlayıcılar ortak `CaptchaSolver` arayüzünü uygular
+(`name`, `supports(type)`, `solve(input)`). Yeni bir sağlayıcı eklemek = bu arayüzü
+uygulayan bir sınıf yazıp zincire eklemektir. Adaptörler:
+- `CapsolverSolver` — mevcut Capsolver istemcisini sarar (tüm türler).
+- `TokenProviderSolver` — Anti-Captcha uyumlu JSON API'sini (Anti-Captcha ve 2Captcha
+  aynı şemayı paylaşır) tek bir sınıfla; yalnızca base URL, task tipi adları ve Turnstile
+  challenge parametre adları (`cData/chlPageData` vs `data/pagedata`) yapılandırma ile değişir.
+- `FallbackSolver` — sağlayıcıları öncelik sırasıyla dener; biri hata verir, zaman aşımına
+  uğrar veya başarısız olursa **otomatik olarak bir sonrakine geçer**; ilk başarılı çözümü
+  döner, hepsi başarısızsa toplu `SolverError` fırlatır.
+
+**Dayanıklılık:** sağlayıcı başına yeniden deneme (geçici hatalarda), deneme başına
+duvar-saati zaman aşımı, her denemenin yapılandırılmış loglanması ve sağlayıcı bazlı hata
+kodları. Bir tür yalnızca Capsolver tarafından destekleniyorsa (ör. DataDome) zincir tek
+sağlayıcıya iner.
+
+**Güvenlik & faturalama:** Tüm sağlayıcı API anahtarları yalnızca backend'de bulunur;
+istemci hiçbir sağlayıcıyı doğrudan çağırmaz. Kredi yalnızca **başarılı** çözümde düşülür
+(reserve → settle); tüm sağlayıcılar başarısız olursa rezerve edilen kredi iade edilir.
+
+Task tipleri ve parametreler üç sağlayıcının resmi dokümanlarından doğrulanmıştır
+(Capsolver: `ReCaptchaV2/V3TaskProxyLess`, `AntiTurnstileTaskProxyLess`; Anti-Captcha &
+2Captcha: `RecaptchaV2/V3TaskProxyless`, `TurnstileTaskProxyless`, v3 için `minScore`).
+
 ## 12. Önerilen Teknoloji Yığını
 
 **Ortak dil: TypeScript** (eklenti + backend aynı dil → paylaşılan tipler, daha az hata).
