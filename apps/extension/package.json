@@ -1,0 +1,16 @@
+{
+  "name": "@grokbot/extension",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@grokbot/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
