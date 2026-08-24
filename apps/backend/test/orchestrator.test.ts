@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SolveRequest } from "@grokbot/shared";
 import { createTestDb } from "./helpers/pglite.js";
-import { failingClient, successClient } from "./helpers/capsolver.js";
+import { failingSolver, successSolver } from "./helpers/solver.js";
 import type { DbBundle } from "../src/db/index.js";
 import { CreditStore } from "../src/credits/creditStore.js";
 import { AuthService } from "../src/auth/deviceAuth.js";
 import { UserLimiter, type UserLimiterConfig } from "../src/limits/rateLimiter.js";
 import { BudgetCircuitBreaker } from "../src/limits/budgetBreaker.js";
 import { SolveOrchestrator } from "../src/solve/orchestrator.js";
-import type { CapsolverClient } from "../src/capsolver/client.js";
+import type { CaptchaSolver } from "../src/providers/types.js";
 
 let bundle: DbBundle;
 let credits: CreditStore;
@@ -28,7 +28,7 @@ const recaptchaReq: SolveRequest = {
 };
 
 function makeOrchestrator(opts: {
-  client: CapsolverClient;
+  solver: CaptchaSolver;
   limits?: UserLimiterConfig;
   breaker?: BudgetCircuitBreaker;
 }): SolveOrchestrator {
@@ -37,7 +37,7 @@ function makeOrchestrator(opts: {
     credits,
     limiter: new UserLimiter(opts.limits ?? wideLimits),
     breaker: opts.breaker ?? new BudgetCircuitBreaker(60_000, 1_000_000),
-    client: opts.client,
+    solver: opts.solver,
   });
 }
 
@@ -58,7 +58,7 @@ afterEach(async () => {
 describe("SolveOrchestrator", () => {
   it("başarılı çözümde krediyi düşer ve token döner", async () => {
     await credits.topUp(userId, 10, null);
-    const orch = makeOrchestrator({ client: successClient() });
+    const orch = makeOrchestrator({ solver: successSolver() });
     const res = await orch.handleSolve({ userId, deviceId }, recaptchaReq);
     expect(res.status).toBe("solved");
     if (res.status === "solved") {
@@ -70,7 +70,7 @@ describe("SolveOrchestrator", () => {
   });
 
   it("yetersiz kredide çözmez ve ücret almaz", async () => {
-    const orch = makeOrchestrator({ client: successClient() });
+    const orch = makeOrchestrator({ solver: successSolver() });
     const res = await orch.handleSolve({ userId, deviceId }, recaptchaReq);
     expect(res.status).toBe("error");
     if (res.status === "error") expect(res.code).toBe("insufficient_credits");
@@ -79,7 +79,7 @@ describe("SolveOrchestrator", () => {
 
   it("Capsolver hatasında krediyi iade eder", async () => {
     await credits.topUp(userId, 10, null);
-    const orch = makeOrchestrator({ client: failingClient() });
+    const orch = makeOrchestrator({ solver: failingSolver() });
     const res = await orch.handleSolve({ userId, deviceId }, recaptchaReq);
     expect(res.status).toBe("error");
     if (res.status === "error") expect(res.code).toBe("capsolver_error");
@@ -88,7 +88,7 @@ describe("SolveOrchestrator", () => {
 
   it("geçersiz parametrede ücret almaz", async () => {
     await credits.topUp(userId, 10, null);
-    const orch = makeOrchestrator({ client: successClient() });
+    const orch = makeOrchestrator({ solver: successSolver() });
     const res = await orch.handleSolve(
       { userId, deviceId },
       { captchaType: "recaptcha_v3", websiteURL: "https://example.com", websiteKey: "k" },
@@ -100,7 +100,7 @@ describe("SolveOrchestrator", () => {
 
   it("idempotency: aynı anahtar tekrar çözülmez, tek kez ücretlendirilir", async () => {
     await credits.topUp(userId, 10, null);
-    const orch = makeOrchestrator({ client: successClient() });
+    const orch = makeOrchestrator({ solver: successSolver() });
     const req: SolveRequest = { ...recaptchaReq, idempotencyKey: "key-1" };
     const first = await orch.handleSolve({ userId, deviceId }, req);
     const second = await orch.handleSolve({ userId, deviceId }, req);
@@ -112,7 +112,7 @@ describe("SolveOrchestrator", () => {
   it("bütçe kesici açıkken çözmez ve ücret almaz", async () => {
     await credits.topUp(userId, 10, null);
     const orch = makeOrchestrator({
-      client: successClient(),
+      solver: successSolver(),
       breaker: new BudgetCircuitBreaker(60_000, 0),
     });
     const res = await orch.handleSolve({ userId, deviceId }, recaptchaReq);
@@ -124,7 +124,7 @@ describe("SolveOrchestrator", () => {
   it("günlük limit aşımında çözmez ve ücret almaz", async () => {
     await credits.topUp(userId, 10, null);
     const orch = makeOrchestrator({
-      client: successClient(),
+      solver: successSolver(),
       limits: { ratePerMinute: 1000, maxConcurrent: 50, dailyMax: 1 },
     });
     const first = await orch.handleSolve({ userId, deviceId }, recaptchaReq);

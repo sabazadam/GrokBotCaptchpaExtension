@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SolveRequest } from "@grokbot/shared";
 import { createTestDb } from "./helpers/pglite.js";
-import { successClient } from "./helpers/capsolver.js";
+import { successSolver } from "./helpers/solver.js";
 import type { DbBundle } from "../src/db/index.js";
 import { CreditStore } from "../src/credits/creditStore.js";
 import { AuthService } from "../src/auth/deviceAuth.js";
@@ -40,7 +40,7 @@ beforeEach(async () => {
     credits,
     limiter: new UserLimiter({ ratePerMinute: 10000, maxConcurrent: 50, dailyMax: 2 }),
     breaker: new BudgetCircuitBreaker(60_000, 1_000_000),
-    client: successClient(),
+    solver: successSolver(),
     metrics,
   });
 });

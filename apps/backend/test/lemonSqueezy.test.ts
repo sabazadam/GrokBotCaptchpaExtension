@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTestDb } from "./helpers/pglite.js";
-import { successClient } from "./helpers/capsolver.js";
+import { successSolver } from "./helpers/solver.js";
 import type { DbBundle } from "../src/db/index.js";
 import { CreditStore } from "../src/credits/creditStore.js";
 import { AuthService } from "../src/auth/deviceAuth.js";
@@ -106,7 +106,7 @@ describe("LemonSqueezyWebhookService", () => {
       credits,
       limiter: new UserLimiter({ ratePerMinute: 100, maxConcurrent: 5, dailyMax: 100 }),
       breaker: new BudgetCircuitBreaker(60_000, 1_000_000),
-      client: successClient(),
+      solver: successSolver(),
     });
     const app = buildApp({ auth, credits, orchestrator, lemonSqueezy: service });
     const raw = JSON.stringify({
