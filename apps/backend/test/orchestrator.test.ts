@@ -134,4 +134,40 @@ describe("SolveOrchestrator", () => {
     if (second.status === "error") expect(second.code).toBe("daily_limit");
     expect(await credits.getBalance(userId)).toBe(9);
   });
+
+  it("başarısız idempotency yeniden denemesinde eşzamanlı istekler tek kez ücretlendirilir", async () => {
+    await credits.topUp(userId, 10, null);
+    const failOrch = makeOrchestrator({ solver: failingSolver() });
+    const req: SolveRequest = { ...recaptchaReq, idempotencyKey: "race-key" };
+    const failed = await failOrch.handleSolve({ userId, deviceId }, req);
+    expect(failed.status).toBe("error");
+    expect(await credits.getBalance(userId)).toBe(10);
+
+    let started = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const gated: CaptchaSolver = {
+      name: "gated",
+      supports: () => true,
+      solve: async () => {
+        started += 1;
+        await gate;
+        return { token: "T", raw: { gRecaptchaResponse: "T" } };
+      },
+    };
+    const orch = makeOrchestrator({ solver: gated });
+    const p1 = orch.handleSolve({ userId, deviceId }, req);
+    const p2 = orch.handleSolve({ userId, deviceId }, req);
+    await new Promise((r) => setTimeout(r, 50));
+    release();
+    const results = await Promise.all([p1, p2]);
+    const solved = results.filter((r) => r.status === "solved");
+    const limited = results.filter((r) => r.status === "error" && r.code === "rate_limited");
+    expect(solved).toHaveLength(1);
+    expect(limited).toHaveLength(1);
+    expect(started).toBe(1);
+    expect(await credits.getBalance(userId)).toBe(9);
+  });
 });

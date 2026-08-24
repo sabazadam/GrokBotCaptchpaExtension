@@ -60,7 +60,7 @@ export function detectCaptchas(doc: Document): DetectedCaptcha[] {
   doc.querySelectorAll('script[src*="recaptcha/api.js"]').forEach((el) => {
     const render = parseParam(el.getAttribute("src") ?? "", "render");
     if (render && render !== "explicit") {
-      add({ type: "recaptcha_v3", websiteKey: render, pageAction: "submit" });
+      add({ type: "recaptcha_v3", websiteKey: render });
     }
   });
 
@@ -68,10 +68,17 @@ export function detectCaptchas(doc: Document): DetectedCaptcha[] {
 }
 
 export function toSolveRequest(c: DetectedCaptcha, websiteURL: string): SolveRequest {
-  return {
+  const req: SolveRequest = {
     captchaType: c.type,
     websiteURL,
     ...(c.websiteKey ? { websiteKey: c.websiteKey } : {}),
-    ...(c.pageAction ? { pageAction: c.pageAction } : {}),
   };
+  if (c.pageAction) {
+    if (c.type === "turnstile") {
+      req.turnstileAction = c.pageAction;
+    } else {
+      req.pageAction = c.pageAction;
+    }
+  }
+  return req;
 }

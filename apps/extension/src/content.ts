@@ -2,27 +2,26 @@ import type { SolveResponse } from "@grokbot/shared";
 import type { SolveMessage } from "./lib/messages.js";
 import { detectCaptchas, toSolveRequest } from "./lib/detect.js";
 import { injectSolution } from "./lib/inject.js";
+import { SolveGate } from "./lib/solveGate.js";
 
-const inFlight = new Set<string>();
-const solved = new Set<string>();
+const gate = new SolveGate(15_000);
 
 async function processOnce(): Promise<void> {
   const found = detectCaptchas(document);
   for (const c of found) {
     const key = `${c.type}:${c.websiteKey ?? ""}`;
-    if (inFlight.has(key) || solved.has(key)) continue;
-    inFlight.add(key);
+    if (!gate.tryBegin(key)) continue;
     try {
       const message: SolveMessage = { kind: "solve", request: toSolveRequest(c, location.href) };
       const res = (await chrome.runtime.sendMessage(message)) as SolveResponse | undefined;
       if (res && res.status === "solved" && res.solution.token) {
         injectSolution(c.type, res.solution.token, document);
-        solved.add(key);
+        gate.markSolved(key);
+      } else {
+        gate.markFailed(key);
       }
     } catch {
-      // sessizce yoksay — bir sonraki taramada tekrar denenir
-    } finally {
-      inFlight.delete(key);
+      gate.markFailed(key);
     }
   }
 }

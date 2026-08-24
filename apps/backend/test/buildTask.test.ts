@@ -15,6 +15,12 @@ describe("registry integrity", () => {
       expect(typeof DEFAULT_CREDIT_COSTS[id]).toBe("number");
     }
   });
+
+  it("reCAPTCHA v3 pageAction ve minScore opsiyoneldir", () => {
+    expect(CAPTCHA_REGISTRY.recaptcha_v3.requiredTaskParams).toEqual(["websiteURL", "websiteKey"]);
+    expect(CAPTCHA_REGISTRY.recaptcha_v3.optionalTaskParams).toContain("pageAction");
+    expect(CAPTCHA_REGISTRY.recaptcha_v3.optionalTaskParams).toContain("minScore");
+  });
 });
 
 describe("buildCapsolverTask", () => {
@@ -58,6 +64,19 @@ describe("buildCapsolverTask", () => {
     });
     expect(task.type).toBe("ReCaptchaV3TaskProxyLess");
     expect(task["pageAction"]).toBeUndefined();
+    expect(task["minScore"]).toBeUndefined();
+  });
+
+  it("reCAPTCHA v3 pageAction ve minScore verilince task gövdesine eklenir", () => {
+    const task = buildCapsolverTask({
+      captchaType: "recaptcha_v3",
+      websiteURL: "https://example.com",
+      websiteKey: "k",
+      pageAction: "login",
+      minScore: 0.7,
+    });
+    expect(task["pageAction"]).toBe("login");
+    expect(task["minScore"]).toBe(0.7);
   });
 
   it("reCAPTCHA v3 websiteKey zorunlu", () => {

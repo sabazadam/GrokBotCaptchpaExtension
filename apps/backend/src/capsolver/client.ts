@@ -36,9 +36,14 @@ export interface CapsolverClientOptions {
 const DEFAULT_BASE_URL = "https://api.capsolver.com";
 const DEFAULT_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_TIMEOUT_MS = 120_000;
+const MAX_REQUEST_TIMEOUT_MS = 30_000;
 
 const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError");
+}
 
 /**
  * Capsolver REST istemcisi. Yalnızca backend'de kullanılır — API anahtarı asla
@@ -64,24 +69,83 @@ export class CapsolverClient {
     this.sleep = options.sleepImpl ?? defaultSleep;
   }
 
-  private async post<T>(path: string, body: Record<string, unknown>): Promise<T> {
-    const res = await this.fetchImpl(`${this.baseUrl}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientKey: this.apiKey, ...body }),
-    });
-    if (!res.ok) {
-      throw new CapsolverError(
-        `Capsolver ${path} HTTP ${res.status}`,
-        "error",
-        `HTTP_${res.status}`,
-      );
-    }
-    return (await res.json()) as T;
+  private requestTimeoutMs(): number {
+    return Math.min(MAX_REQUEST_TIMEOUT_MS, Math.max(this.timeoutMs, 1));
   }
 
-  async getBalance(): Promise<number> {
-    const data = await this.post<CapsolverGetBalanceResponse>("/getBalance", {});
+  private async post<T>(
+    path: string,
+    body: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    if (signal?.aborted) {
+      throw new CapsolverError("istek iptal edildi", "timeout");
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.requestTimeoutMs());
+    const onParentAbort = (): void => controller.abort();
+    signal?.addEventListener("abort", onParentAbort);
+    try {
+      const res = await this.fetchImpl(`${this.baseUrl}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, clientKey: this.apiKey }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw new CapsolverError(
+          `Capsolver ${path} HTTP ${res.status}`,
+          "error",
+          `HTTP_${res.status}`,
+        );
+      }
+      try {
+        return (await res.json()) as T;
+      } catch {
+        throw new CapsolverError(`Capsolver ${path} geçersiz JSON`, "error");
+      }
+    } catch (err) {
+      if (err instanceof CapsolverError) throw err;
+      if (isAbortError(err)) {
+        throw new CapsolverError("istek zaman aşımı veya iptal", "timeout");
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onParentAbort);
+    }
+  }
+
+  private async wait(ms: number, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) throw new CapsolverError("istek iptal edildi", "timeout");
+    if (!signal) {
+      await this.sleep(ms);
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      const onAbort = (): void => {
+        cleanup();
+        reject(new CapsolverError("istek iptal edildi", "timeout"));
+      };
+      const cleanup = (): void => {
+        signal.removeEventListener("abort", onAbort);
+      };
+      signal.addEventListener("abort", onAbort);
+      void this.sleep(ms).then(
+        () => {
+          cleanup();
+          resolve();
+        },
+        (err: unknown) => {
+          cleanup();
+          reject(err);
+        },
+      );
+    });
+  }
+
+  async getBalance(signal?: AbortSignal): Promise<number> {
+    const data = await this.post<CapsolverGetBalanceResponse>("/getBalance", {}, signal);
     if (data.errorId !== 0) {
       throw new CapsolverError(
         data.errorDescription ?? "getBalance hatası",
@@ -92,8 +156,11 @@ export class CapsolverClient {
     return data.balance ?? 0;
   }
 
-  async createTask(task: CapsolverTask): Promise<CapsolverCreateTaskResponse> {
-    const data = await this.post<CapsolverCreateTaskResponse>("/createTask", { task });
+  async createTask(
+    task: CapsolverTask,
+    signal?: AbortSignal,
+  ): Promise<CapsolverCreateTaskResponse> {
+    const data = await this.post<CapsolverCreateTaskResponse>("/createTask", { task }, signal);
     if (data.errorId !== 0) {
       throw new CapsolverError(
         data.errorDescription ?? "createTask hatası",
@@ -104,10 +171,15 @@ export class CapsolverClient {
     return data;
   }
 
-  async getTaskResult(taskId: string): Promise<CapsolverGetTaskResultResponse> {
-    const data = await this.post<CapsolverGetTaskResultResponse>("/getTaskResult", {
-      taskId,
-    });
+  async getTaskResult(
+    taskId: string | number,
+    signal?: AbortSignal,
+  ): Promise<CapsolverGetTaskResultResponse> {
+    const data = await this.post<CapsolverGetTaskResultResponse>(
+      "/getTaskResult",
+      { taskId },
+      signal,
+    );
     if (data.errorId !== 0) {
       throw new CapsolverError(
         data.errorDescription ?? "getTaskResult hatası",
@@ -123,22 +195,22 @@ export class CapsolverClient {
    * - Recognition görevleri (ör. ImageToTextTask) createTask sonucunu doğrudan döndürür.
    * - Token görevleri ready/failed olana ya da timeout'a kadar getTaskResult ile beklenir.
    */
-  async solve(task: CapsolverTask): Promise<Record<string, unknown>> {
-    const created = await this.createTask(task);
+  async solve(task: CapsolverTask, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    const created = await this.createTask(task, signal);
 
     if (created.solution && (created.status === "ready" || created.status === undefined)) {
       return created.solution;
     }
 
     const taskId = created.taskId;
-    if (!taskId) {
+    if (taskId === undefined || taskId === null || taskId === "") {
       throw new CapsolverError("createTask taskId döndürmedi", "error");
     }
 
     const deadline = Date.now() + this.timeoutMs;
     while (Date.now() < deadline) {
-      await this.sleep(this.pollIntervalMs);
-      const result = await this.getTaskResult(taskId);
+      await this.wait(this.pollIntervalMs, signal);
+      const result = await this.getTaskResult(taskId, signal);
       if (result.status === "ready" && result.solution) {
         return result.solution;
       }
