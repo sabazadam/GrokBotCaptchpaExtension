@@ -72,6 +72,41 @@ describe("TokenProviderSolver (Anti-Captcha)", () => {
     expect(cap.lastTask()["pageAction"]).toBe("login");
   });
 
+  it("reCAPTCHA v3 minScore 0.5 -> 0.7 (eşit mesafede yüksek)", async () => {
+    const cap = capturingFetch({ gRecaptchaResponse: "GTOKEN" });
+    const solver = new TokenProviderSolver(ANTI_CAPTCHA_CONFIG, {
+      apiKey: "k",
+      fetchImpl: cap.fetchImpl,
+      sleepImpl: noopSleep,
+      pollIntervalMs: 1,
+    });
+    await solver.solve({
+      captchaType: "recaptcha_v3",
+      websiteURL: "https://site.com",
+      websiteKey: "6Lc",
+      pageAction: "login",
+      minScore: 0.5,
+    });
+    expect(cap.lastTask()["minScore"]).toBe(0.7);
+  });
+
+  it("reCAPTCHA v2 enterprise task tipini seçer", async () => {
+    const cap = capturingFetch({ gRecaptchaResponse: "GTOKEN" });
+    const solver = new TokenProviderSolver(ANTI_CAPTCHA_CONFIG, {
+      apiKey: "k",
+      fetchImpl: cap.fetchImpl,
+      sleepImpl: noopSleep,
+      pollIntervalMs: 1,
+    });
+    await solver.solve({
+      captchaType: "recaptcha_v2",
+      websiteURL: "https://site.com",
+      websiteKey: "6Lc",
+      isEnterprise: true,
+    });
+    expect(cap.lastTask()["type"]).toBe("RecaptchaV2EnterpriseTaskProxyless");
+  });
+
   it("Turnstile cData'yı Anti-Captcha adıyla (cData) gönderir", async () => {
     const cap = capturingFetch({ token: "TT" });
     const solver = new TokenProviderSolver(ANTI_CAPTCHA_CONFIG, {

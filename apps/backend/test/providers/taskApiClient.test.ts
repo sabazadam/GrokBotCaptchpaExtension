@@ -87,4 +87,63 @@ describe("TaskApiClient", () => {
     expect(capturedBody["clientKey"]).toBe("secret");
     expect(capturedBody["softId"]).toBe(1234);
   });
+
+  it("sayısal taskId kabul edilir ve getTaskResult'a aynen gider", async () => {
+    let polledId: unknown;
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/createTask")) return json({ errorId: 0, taskId: 74069493922 });
+      polledId = JSON.parse(String(init?.body)).taskId;
+      return json({ errorId: 0, status: "ready", solution: { token: "T" } });
+    };
+    const client = new TaskApiClient({
+      apiKey: "k",
+      baseUrl: "https://api.example.com",
+      fetchImpl,
+      sleepImpl: noopSleep,
+      pollIntervalMs: 1,
+    });
+    const solution = await client.solve({ type: "x" });
+    expect(polledId).toBe(74069493922);
+    expect(solution["token"]).toBe("T");
+  });
+
+  it("gövdedeki clientKey apiKey'i ezemez", async () => {
+    let capturedBody: Record<string, unknown> = {};
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/createTask")) {
+        capturedBody = JSON.parse(String(init?.body));
+        return json({ errorId: 0, taskId: "t1" });
+      }
+      return json({ errorId: 0, status: "ready", solution: { token: "T" } });
+    };
+    const client = new TaskApiClient({
+      apiKey: "real-secret",
+      baseUrl: "https://api.example.com",
+      fetchImpl,
+      sleepImpl: noopSleep,
+      pollIntervalMs: 1,
+    });
+    await client.solve({ type: "x", clientKey: "attacker" });
+    expect(capturedBody["clientKey"]).toBe("real-secret");
+  });
+
+  it("iptal edilmiş AbortSignal -> kind=timeout", async () => {
+    const ac = new AbortController();
+    ac.abort();
+    const client = new TaskApiClient({
+      apiKey: "k",
+      baseUrl: "https://api.example.com",
+      fetchImpl: async () => json({ errorId: 0, taskId: "t1" }),
+      sleepImpl: noopSleep,
+    });
+    try {
+      await client.solve({ type: "x" }, ac.signal);
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(TaskApiError);
+      expect((err as TaskApiError).kind).toBe("timeout");
+    }
+  });
 });

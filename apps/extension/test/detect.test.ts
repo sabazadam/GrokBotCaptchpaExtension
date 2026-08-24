@@ -15,7 +15,7 @@ describe("detectCaptchas", () => {
     expect(found[0]).toMatchObject({
       type: "turnstile",
       websiteKey: "0xAAA",
-      pageAction: "login",
+      turnstileAction: "login",
     });
   });
 
@@ -35,13 +35,13 @@ describe("detectCaptchas", () => {
     );
   });
 
-  it("reCAPTCHA v3'ü api.js?render ile tespit eder", () => {
+  it("reCAPTCHA v3'ü api.js?render ile tespit eder (sahte pageAction uydurmaz)", () => {
     document.body.innerHTML =
       '<script src="https://www.google.com/recaptcha/api.js?render=V3_SITEKEY"></script>';
     const found = detectCaptchas(document);
-    expect(found.some((c) => c.type === "recaptcha_v3" && c.websiteKey === "V3_SITEKEY")).toBe(
-      true,
-    );
+    const v3 = found.find((c) => c.type === "recaptcha_v3" && c.websiteKey === "V3_SITEKEY");
+    expect(v3).toBeDefined();
+    expect(v3?.pageAction).toBeUndefined();
   });
 
   it("render=explicit v3 olarak sayılmaz", () => {
@@ -53,14 +53,35 @@ describe("detectCaptchas", () => {
 
   it("toSolveRequest alanları doğru eşler", () => {
     const req = toSolveRequest(
-      { type: "recaptcha_v3", websiteKey: "K", pageAction: "submit" },
+      { type: "recaptcha_v3", websiteKey: "K", pageAction: "checkout" },
       "https://site.com/pay",
     );
     expect(req).toEqual({
       captchaType: "recaptcha_v3",
       websiteURL: "https://site.com/pay",
       websiteKey: "K",
-      pageAction: "submit",
+      pageAction: "checkout",
+      idempotencyKey: "https://site.com:recaptcha_v3:K",
     });
+  });
+
+  it("Turnstile action'ı pageAction değil turnstileAction olarak eşler", () => {
+    const fromPageAction = toSolveRequest(
+      { type: "turnstile", websiteKey: "0xAAA", pageAction: "login" },
+      "https://site.com",
+    );
+    expect(fromPageAction).toEqual({
+      captchaType: "turnstile",
+      websiteURL: "https://site.com",
+      websiteKey: "0xAAA",
+      turnstileAction: "login",
+      idempotencyKey: "https://site.com:turnstile:0xAAA",
+    });
+    const fromField = toSolveRequest(
+      { type: "turnstile", websiteKey: "0xAAA", turnstileAction: "login" },
+      "https://site.com/login",
+    );
+    expect(fromField.turnstileAction).toBe("login");
+    expect(fromField.pageAction).toBeUndefined();
   });
 });

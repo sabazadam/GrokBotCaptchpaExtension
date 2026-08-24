@@ -1,7 +1,7 @@
 import type { CaptchaTypeId, NormalizedSolution, SolveRequest } from "@grokbot/shared";
 import { normalizeSolution } from "../solve/solveService.js";
 import { TaskApiClient, TaskApiError } from "./taskApiClient.js";
-import { SolverError, type CaptchaSolver } from "./types.js";
+import { isAbortError, SolverError, type CaptchaSolver } from "./types.js";
 
 const SUPPORTED: ReadonlySet<CaptchaTypeId> = new Set<CaptchaTypeId>([
   "recaptcha_v2",
@@ -9,12 +9,27 @@ const SUPPORTED: ReadonlySet<CaptchaTypeId> = new Set<CaptchaTypeId>([
   "turnstile",
 ]);
 
+const ALLOWED_MIN_SCORES = [0.3, 0.7, 0.9] as const;
+
+/** Anti-Captcha/2Captcha yalnızca 0.3 / 0.7 / 0.9 kabul eder; en yakına (eşitlikte yükseğe) yuvarla. */
+export function snapMinScore(value: number | undefined): number {
+  const n = value ?? 0.3;
+  let best: (typeof ALLOWED_MIN_SCORES)[number] = ALLOWED_MIN_SCORES[0];
+  for (const allowed of ALLOWED_MIN_SCORES) {
+    const d = Math.abs(allowed - n);
+    const bestD = Math.abs(best - n);
+    if (d < bestD || (d === bestD && allowed > best)) best = allowed;
+  }
+  return best;
+}
+
 /** Sağlayıcıya özgü task tipi adları ve Turnstile challenge parametre adları. */
 export interface TokenProviderConfig {
   name: string;
   baseUrl: string;
   taskTypes: {
     recaptchaV2: string;
+    recaptchaV2Enterprise: string;
     recaptchaV3: string;
     turnstile: string;
   };
@@ -62,7 +77,9 @@ export class TokenProviderSolver implements CaptchaSolver {
     switch (input.captchaType) {
       case "recaptcha_v2": {
         const task: Record<string, unknown> = {
-          type: this.config.taskTypes.recaptchaV2,
+          type: input.isEnterprise
+            ? this.config.taskTypes.recaptchaV2Enterprise
+            : this.config.taskTypes.recaptchaV2,
           websiteURL: input.websiteURL,
           websiteKey: input.websiteKey,
         };
@@ -74,7 +91,7 @@ export class TokenProviderSolver implements CaptchaSolver {
           type: this.config.taskTypes.recaptchaV3,
           websiteURL: input.websiteURL,
           websiteKey: input.websiteKey,
-          minScore: input.minScore ?? 0.3,
+          minScore: snapMinScore(input.minScore),
         };
         if (input.pageAction) task["pageAction"] = input.pageAction;
         if (input.isEnterprise !== undefined) task["isEnterprise"] = input.isEnterprise;
@@ -99,7 +116,7 @@ export class TokenProviderSolver implements CaptchaSolver {
     }
   }
 
-  async solve(input: SolveRequest): Promise<NormalizedSolution> {
+  async solve(input: SolveRequest, signal?: AbortSignal): Promise<NormalizedSolution> {
     if (!this.supports(input.captchaType)) {
       throw new SolverError(
         `${this.name} bu türü desteklemiyor: ${input.captchaType}`,
@@ -112,11 +129,14 @@ export class TokenProviderSolver implements CaptchaSolver {
     }
     const task = this.buildTask(input);
     try {
-      const raw = await this.client.solve(task);
+      const raw = await this.client.solve(task, signal);
       return normalizeSolution(input.captchaType, raw);
     } catch (err) {
       if (err instanceof TaskApiError) {
         throw new SolverError(err.message, err.kind, this.name, err.code);
+      }
+      if (isAbortError(err)) {
+        throw new SolverError((err as Error).message || "iptal edildi", "timeout", this.name);
       }
       throw new SolverError((err as Error).message, "error", this.name);
     }
@@ -129,6 +149,7 @@ export const ANTI_CAPTCHA_CONFIG: TokenProviderConfig = {
   baseUrl: "https://api.anti-captcha.com",
   taskTypes: {
     recaptchaV2: "RecaptchaV2TaskProxyless",
+    recaptchaV2Enterprise: "RecaptchaV2EnterpriseTaskProxyless",
     recaptchaV3: "RecaptchaV3TaskProxyless",
     turnstile: "TurnstileTaskProxyless",
   },
@@ -141,6 +162,7 @@ export const TWO_CAPTCHA_CONFIG: TokenProviderConfig = {
   baseUrl: "https://api.2captcha.com",
   taskTypes: {
     recaptchaV2: "RecaptchaV2TaskProxyless",
+    recaptchaV2Enterprise: "RecaptchaV2EnterpriseTaskProxyless",
     recaptchaV3: "RecaptchaV3TaskProxyless",
     turnstile: "TurnstileTaskProxyless",
   },

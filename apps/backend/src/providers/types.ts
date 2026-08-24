@@ -36,12 +36,19 @@ export interface CaptchaSolver {
   /** Bu sağlayıcının verilen CAPTCHA türünü destekleyip desteklemediği. */
   supports(type: CaptchaTypeId): boolean;
   /** CAPTCHA'yı çözer; başarısızlıkta SolverError fırlatır. */
-  solve(input: SolveRequest): Promise<NormalizedSolution>;
+  solve(input: SolveRequest, signal?: AbortSignal): Promise<NormalizedSolution>;
+}
+
+export function isAbortError(err: unknown): boolean {
+  return err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError");
 }
 
 /** Bilinmeyen bir hatayı SolverError'a normalize eder. */
 export function toSolverError(err: unknown, provider: string): SolverError {
   if (err instanceof SolverError) return err;
+  if (isAbortError(err)) {
+    return new SolverError((err as Error).message || "iptal edildi", "timeout", provider);
+  }
   if (err instanceof Error) {
     return new SolverError(err.message, "error", provider);
   }
