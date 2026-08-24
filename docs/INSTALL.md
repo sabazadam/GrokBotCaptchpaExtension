@@ -7,6 +7,8 @@ dağıtılacağını ve bir abonenin nasıl etkinleştirileceğini anlatır.
 
 Yerelde denemek için tek gerçek gereksinim bir **Capsolver API anahtarı** ve **Chrome**.
 `DATABASE_URL` boş bırakılırsa backend gömülü (pglite) veritabanı ile çalışır.
+PGlite **tek süreçlidir**: sunucu ayaktayken `issue-code` aynı veri dizinini ikinci kez
+açmaz; `ADMIN_TOKEN` ile çalışan backend'in `/admin` API'sine gider.
 
 ```bash
 pnpm install
@@ -18,8 +20,10 @@ ADMIN_TOKEN=uzun-rastgele-bir-deger \
 pnpm --filter @grokbot/backend start
 # -> http://localhost:3000 (şema açılışta otomatik kurulur)
 
-# Bir cihaz için aktivasyon kodu + kredi üret (kurulum promptunu da yazar)
+# Bir cihaz için aktivasyon kodu + kredi üret (kurulum promptunu da yazar).
+# ADMIN_TOKEN, çalışan sunucuya gitmek için gereklidir (gömülü DB kilitli olur).
 CAPSOLVER_API_KEY=gercek_capsolver_anahtarin \
+ADMIN_TOKEN=uzun-rastgele-bir-deger \
 pnpm --filter @grokbot/backend issue-code kullanici@ornek.com 100
 ```
 
@@ -36,7 +40,7 @@ Gereken ortam değişkenleri için `apps/backend/.env.example` dosyasına bakın
 
 ```bash
 CAPSOLVER_API_KEY=...         # yalnızca backend'de; ASLA eklentiye konmaz
-DATABASE_URL=postgres://...   # gerçek PostgreSQL (boşsa gömülü pglite kullanılır)
+DATABASE_URL=postgres://...   # gerçek PostgreSQL (NODE_ENV=production iken zorunlu)
 ADMIN_TOKEN=...               # admin uçlarını korur (aktivasyon kodu üretimi)
 PUBLIC_BACKEND_URL=https://api.senin-alan-adin.com
 # Opsiyonel fallback sağlayıcılar:

@@ -45,5 +45,6 @@ export { loadConfig } from "./config.js";
 export type { AppConfig, CapsolverConfig, LimitsConfig, BudgetConfig } from "./config.js";
 export { createPostgresDb, migrate } from "./db/index.js";
 export { createEmbeddedDb } from "./db/embedded.js";
+export { openConfiguredDb } from "./db/open.js";
 export type { DbBundle, AppDatabase } from "./db/index.js";
 export * as schema from "./db/schema.js";
