@@ -23,5 +23,10 @@
       "@grokbot/shared/*": ["packages/shared/src/*"]
     }
   },
-  "include": ["packages/*/src/**/*", "apps/*/src/**/*", "apps/*/test/**/*", "*.config.ts"]
+  "include": [
+    "packages/*/src/**/*",
+    "apps/backend/src/**/*",
+    "apps/backend/test/**/*",
+    "*.config.ts"
+  ]
 }

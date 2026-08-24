@@ -11,5 +11,15 @@ export default defineConfig({
   },
   test: {
     include: ["apps/**/*.test.ts", "packages/**/*.test.ts"],
+    environmentOptions: {
+      happyDOM: {
+        settings: {
+          disableJavaScriptFileLoading: true,
+          disableJavaScriptEvaluation: true,
+          disableCSSFileLoading: true,
+          disableIframePageLoading: true,
+        },
+      },
+    },
   },
 });
