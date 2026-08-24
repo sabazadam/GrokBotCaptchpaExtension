@@ -19,6 +19,57 @@ docs/DESIGN.md    Sistem tasarımı ve yol haritası
 docs/INSTALL.md   Kurulum, dağıtım ve onboarding rehberi
 ```
 
+## Kurulum ve Çalıştırma
+
+**Önkoşullar:** Node 22+, [pnpm](https://pnpm.io), Google Chrome ve bir **Capsolver API
+anahtarı**. Yerelde denemek için harici veritabanı gerekmez (gömülü pglite kullanılır).
+
+### Hızlı başlangıç
+
+```bash
+pnpm install
+pnpm build:extension            # -> apps/extension/dist (Chrome'a yüklenecek)
+
+# 1) Backend'i başlat (gömülü DB; harici Postgres yok)
+CAPSOLVER_API_KEY=capsolver_anahtarin ADMIN_TOKEN=uzun-rastgele-bir-deger \
+  pnpm --filter @grokbot/backend start        # -> http://localhost:3000
+
+# 2) Bir cihaz için aktivasyon kodu + kredi üret (kurulum promptunu da yazar)
+CAPSOLVER_API_KEY=capsolver_anahtarin \
+  pnpm --filter @grokbot/backend issue-code sen@ornek.com 100
+```
+
+3. Chrome'da `chrome://extensions` → sağ üstten **Geliştirici modu** → **Paketlenmemiş öğe
+   yükle** → `apps/extension/dist` klasörünü seç.
+4. Araç çubuğundaki eklenti simgesine tıkla → **Backend URL** = `http://localhost:3000`,
+   **Aktivasyon kodu**'nu yapıştır → **Etkinleştir**. Kalan kredi görünür.
+5. reCAPTCHA v2/v3 veya Turnstile içeren bir sayfaya git → otomatik çözülür.
+
+### Mac Mini (ana sunucu) + MacBook (istemci) senaryosu
+
+Backend'i Mac Mini'de çalıştırıp MacBook'un Chrome eklentisinden bağlanmak için:
+
+1. **Mac Mini'de** backend'i başlat (yukarıdaki 1. adım). Sunucu `0.0.0.0` dinler, yani
+   yerel ağdan erişilebilir. macOS "gelen bağlantılara izin ver" derse **izin ver**.
+2. Mac Mini'nin yerel ağ IP'sini öğren: `ipconfig getifaddr en0` (ör. `192.168.1.42`).
+3. **Mac Mini'de** o cihaz için aktivasyon kodu üret (2. adım).
+4. **MacBook'ta** eklentiyi yükle (3. adım) ve popup'ta **Backend URL**'yi Mac Mini'nin
+   IP'siyle gir: `http://192.168.1.42:3000`. Aktivasyon kodunu gir → Etkinleştir.
+5. İki cihaz **aynı yerel ağda** olmalı. Ağ dışından (internet üzerinden) bağlanacaksan
+   port yönlendirme/tünel + tercihen HTTPS gerekir.
+
+Sunucuyu sürekli açık tutmak için `tmux`, `pm2` veya bir `launchd` servisi kullanabilirsin.
+Üretim/çok makineli dağıtım (gerçek PostgreSQL, kurumsal zorunlu kurulum, ödeme webhook'u)
+için: [`docs/INSTALL.md`](docs/INSTALL.md).
+
+### Çözüm süresi hakkında
+
+Çözüm süresi neredeyse tamamen **CAPTCHA sağlayıcısının** işidir, bu backend'in veya ağın
+değil. reCAPTCHA **v2** görsel bulmaca olduğundan en yavaş türdür (tipik olarak ~15–70 sn);
+reCAPTCHA **v3** ve **Turnstile** genelde birkaç saniyede biter. Backend yalnızca sonucu
+poll eder (varsayılan 2 sn aralık, `CAPSOLVER_POLL_INTERVAL_MS` ile ayarlanabilir) ve en
+fazla bir poll aralığı kadar ek gecikme ekler.
+
 ## Geliştirme
 
 ```bash
