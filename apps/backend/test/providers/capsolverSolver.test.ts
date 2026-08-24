@@ -25,7 +25,7 @@ describe("CapsolverSolver", () => {
   it("geçersiz parametrede SolverError(unsupported) fırlatır", async () => {
     const solver = new CapsolverSolver(successClient());
     try {
-      await solver.solve({ captchaType: "recaptcha_v3", websiteURL: "u", websiteKey: "k" });
+      await solver.solve({ captchaType: "recaptcha_v3", websiteURL: "u" });
       expect.unreachable();
     } catch (err) {
       expect(err).toBeInstanceOf(SolverError);

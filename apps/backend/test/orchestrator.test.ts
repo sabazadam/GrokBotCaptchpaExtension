@@ -91,7 +91,7 @@ describe("SolveOrchestrator", () => {
     const orch = makeOrchestrator({ solver: successSolver() });
     const res = await orch.handleSolve(
       { userId, deviceId },
-      { captchaType: "recaptcha_v3", websiteURL: "https://example.com", websiteKey: "k" },
+      { captchaType: "recaptcha_v3", websiteURL: "https://example.com" },
     );
     expect(res.status).toBe("error");
     if (res.status === "error") expect(res.code).toBe("invalid_params");

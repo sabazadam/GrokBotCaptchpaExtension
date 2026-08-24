@@ -68,12 +68,14 @@ export function buildCapsolverTask(req: SolveRequest): CapsolverTask {
     }
 
     case "recaptcha_v3": {
+      // pageAction v3 için opsiyoneldir (Capsolver, Anti-Captcha ve 2Captcha dokümanları),
+      // ama skor doğruluğu için tavsiye edilir.
       const task: CapsolverTask = {
         type,
         websiteURL: requireField(req.websiteURL, "websiteURL"),
         websiteKey: requireField(req.websiteKey, "websiteKey"),
-        pageAction: requireField(req.pageAction, "pageAction"),
       };
+      if (req.pageAction) task["pageAction"] = req.pageAction;
       if (req.enterprisePayload) task["enterprisePayload"] = req.enterprisePayload;
       if (req.proxy) task["proxy"] = req.proxy;
       return task;

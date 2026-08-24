@@ -50,13 +50,19 @@ describe("buildCapsolverTask", () => {
     expect(task["proxy"]).toBe("http:1.2.3.4:8080:u:p");
   });
 
-  it("reCAPTCHA v3 pageAction zorunlu", () => {
+  it("reCAPTCHA v3 pageAction olmadan da kurulur (opsiyonel)", () => {
+    const task = buildCapsolverTask({
+      captchaType: "recaptcha_v3",
+      websiteURL: "https://example.com",
+      websiteKey: "k",
+    });
+    expect(task.type).toBe("ReCaptchaV3TaskProxyLess");
+    expect(task["pageAction"]).toBeUndefined();
+  });
+
+  it("reCAPTCHA v3 websiteKey zorunlu", () => {
     expect(() =>
-      buildCapsolverTask({
-        captchaType: "recaptcha_v3",
-        websiteURL: "https://example.com",
-        websiteKey: "k",
-      }),
+      buildCapsolverTask({ captchaType: "recaptcha_v3", websiteURL: "https://example.com" }),
     ).toThrowError(BuildTaskError);
   });
 
