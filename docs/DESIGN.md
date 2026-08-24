@@ -226,7 +226,7 @@ Amaç: kullanıcı tek bir talimat bloğunu bota verip kolayca kursun.
 | CAPTCHA türü | `task.type` (proxyless) | Model | Zorunlu parametreler | Çözüm alanı | Eklenti uyumu |
 |---|---|---|---|---|---|
 | reCAPTCHA v2 (+ Enterprise) | `ReCaptchaV2TaskProxyLess` (`ReCaptchaV2EnterpriseTaskProxyLess`) | token | `websiteURL`, `websiteKey` | `solution.gRecaptchaResponse` | Tam |
-| reCAPTCHA v3 (+ Enterprise) | `ReCaptchaV3TaskProxyLess` (`ReCaptchaV3EnterpriseTaskProxyLess`) | token | `websiteURL`, `websiteKey`, `pageAction` | `solution.gRecaptchaResponse` | Tam |
+| reCAPTCHA v3 (+ Enterprise) | `ReCaptchaV3TaskProxyLess` (`ReCaptchaV3EnterpriseTaskProxyLess`) | token | `websiteURL`, `websiteKey` (ops. `pageAction`) | `solution.gRecaptchaResponse` | Tam |
 | Cloudflare Turnstile | `AntiTurnstileTaskProxyLess` | token | `websiteURL`, `websiteKey` (ops. `metadata.action`/`cdata`) | `solution.token` | Tam |
 | GeeTest v3/v4 | `GeeTestTaskProxyLess` | token | v3: `gt`+`challenge`; v4: `captchaId` (+`websiteURL`) | v3: `validate`/`seccode`; v4: `captcha_output`/`lot_number`/`pass_token` | Uyumlu |
 | AWS WAF | `AntiAwsWafTaskProxyLess` | token/cookie | `websiteURL` (ops. `awsKey`/`awsIv`/`awsContext`…) | `solution.cookie` (`aws-waf-token`) | Kısmi (cookie enjeksiyonu) |

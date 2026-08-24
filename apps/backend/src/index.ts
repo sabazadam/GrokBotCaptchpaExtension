@@ -44,6 +44,9 @@ export type { LemonSqueezyOptions, WebhookResult } from "./payments/lemonSqueezy
 export { loadConfig } from "./config.js";
 export type { AppConfig, CapsolverConfig, LimitsConfig, BudgetConfig } from "./config.js";
 export { createPostgresDb, migrate } from "./db/index.js";
-export { createEmbeddedDb } from "./db/embedded.js";
+export { createEmbeddedDb, EMBEDDED_DB_LOCK_FILE } from "./db/embedded.js";
+export { openConfiguredDb } from "./db/open.js";
 export type { DbBundle, AppDatabase } from "./db/index.js";
+export { issueCode, IssueCodeError } from "./onboarding/issueCode.js";
+export type { IssueCodeResult } from "./onboarding/issueCode.js";
 export * as schema from "./db/schema.js";

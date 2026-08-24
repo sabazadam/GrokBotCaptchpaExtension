@@ -1,6 +1,6 @@
 import { loadConfig } from "./config.js";
-import { createPostgresDb, migrate, type DbBundle } from "./db/index.js";
-import { createEmbeddedDb } from "./db/embedded.js";
+import { migrate, type DbBundle } from "./db/index.js";
+import { openConfiguredDb } from "./db/open.js";
 import { CreditStore } from "./credits/creditStore.js";
 import { AuthService } from "./auth/deviceAuth.js";
 import { UserLimiter } from "./limits/rateLimiter.js";
@@ -25,14 +25,11 @@ async function main(): Promise<void> {
   const logger = createLogger({ base: { service: "grokbot-backend" } });
   const metrics = new Metrics();
 
-  let bundle: DbBundle;
-  if (config.databaseUrl) {
-    bundle = createPostgresDb(config.databaseUrl);
-    logger.info("db", { mode: "postgres" });
-  } else {
-    bundle = await createEmbeddedDb(config.embeddedDataDir);
-    logger.info("db", { mode: "embedded", dir: config.embeddedDataDir });
-  }
+  const bundle: DbBundle = await openConfiguredDb(config);
+  logger.info("db", {
+    mode: config.databaseUrl ? "postgres" : "embedded",
+    ...(config.databaseUrl ? {} : { dir: config.embeddedDataDir }),
+  });
   await migrate(bundle);
 
   const credits = new CreditStore(bundle.db);
@@ -132,8 +129,8 @@ async function main(): Promise<void> {
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 
-  await app.listen({ port: config.port, host: "0.0.0.0" });
-  logger.info("listening", { port: config.port });
+  await app.listen({ port: config.port, host: config.listenHost });
+  logger.info("listening", { port: config.port, host: config.listenHost });
 }
 
 main().catch((err) => {
