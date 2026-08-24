@@ -9,6 +9,14 @@ import { SolveOrchestrator } from "./solve/orchestrator.js";
 import { LemonSqueezyWebhookService } from "./payments/lemonSqueezy.js";
 import { createLogger } from "./observability/logger.js";
 import { Metrics } from "./observability/metrics.js";
+import {
+  CapsolverSolver,
+  FallbackSolver,
+  TokenProviderSolver,
+  ANTI_CAPTCHA_CONFIG,
+  TWO_CAPTCHA_CONFIG,
+  type CaptchaSolver,
+} from "./providers/index.js";
 import { buildApp } from "./http/app.js";
 
 async function main(): Promise<void> {
@@ -32,7 +40,7 @@ async function main(): Promise<void> {
       logger.warn("budget_spend_warning", { spend, maxSpend });
     },
   });
-  const client = new CapsolverClient({
+  const capsolverClient = new CapsolverClient({
     apiKey: config.capsolver.apiKey,
     ...(config.capsolver.baseUrl ? { baseUrl: config.capsolver.baseUrl } : {}),
     ...(config.capsolver.pollIntervalMs
@@ -40,12 +48,43 @@ async function main(): Promise<void> {
       : {}),
     ...(config.capsolver.timeoutMs ? { timeoutMs: config.capsolver.timeoutMs } : {}),
   });
+
+  // Sağlayıcı zinciri: Capsolver (birincil) -> Anti-Captcha -> 2Captcha (varsa).
+  const providers: CaptchaSolver[] = [new CapsolverSolver(capsolverClient)];
+  const tokenOpts = {
+    pollIntervalMs: config.providers.tokenPollIntervalMs,
+    timeoutMs: config.providers.tokenTimeoutMs,
+  };
+  if (config.providers.anticaptchaApiKey) {
+    providers.push(
+      new TokenProviderSolver(ANTI_CAPTCHA_CONFIG, {
+        apiKey: config.providers.anticaptchaApiKey,
+        ...tokenOpts,
+      }),
+    );
+  }
+  if (config.providers.twocaptchaApiKey) {
+    providers.push(
+      new TokenProviderSolver(TWO_CAPTCHA_CONFIG, {
+        apiKey: config.providers.twocaptchaApiKey,
+        ...tokenOpts,
+      }),
+    );
+  }
+  const solver = new FallbackSolver({
+    providers,
+    logger,
+    retriesPerProvider: config.providers.retriesPerProvider,
+    attemptTimeoutMs: config.providers.attemptTimeoutMs,
+  });
+  logger.info("solver_chain", { providers: providers.map((p) => p.name) });
+
   const orchestrator = new SolveOrchestrator({
     db: bundle.db,
     credits,
     limiter,
     breaker,
-    client,
+    solver,
     logger,
     metrics,
   });

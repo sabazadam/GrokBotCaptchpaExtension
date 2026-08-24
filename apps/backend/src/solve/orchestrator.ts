@@ -12,19 +12,18 @@ import { solves } from "../db/schema.js";
 import type { CreditStore } from "../credits/creditStore.js";
 import type { UserLimiter } from "../limits/rateLimiter.js";
 import type { BudgetCircuitBreaker } from "../limits/budgetBreaker.js";
-import { CapsolverClient, CapsolverError } from "../capsolver/client.js";
-import type { CapsolverTask } from "../capsolver/types.js";
 import type { Logger } from "../observability/logger.js";
 import type { Metrics } from "../observability/metrics.js";
+import { SolverError, type CaptchaSolver } from "../providers/types.js";
 import { buildCapsolverTask, BuildTaskError } from "./buildTask.js";
-import { normalizeSolution } from "./solveService.js";
 
 export interface OrchestratorDeps {
   db: AppDatabase;
   credits: CreditStore;
   limiter: UserLimiter;
   breaker: BudgetCircuitBreaker;
-  client: CapsolverClient;
+  /** Çok sağlayıcılı çözücü (Capsolver -> Anti-Captcha -> 2Captcha fallback). */
+  solver: CaptchaSolver;
   /** Tür bazlı kredi maliyeti (varsayılan DEFAULT_CREDIT_COSTS). */
   creditCosts?: Record<CaptchaTypeId, number>;
   logger?: Logger;
@@ -38,11 +37,12 @@ interface AuthedContext {
 
 function mapError(err: unknown): { code: ApiErrorCode; message: string } {
   if (err instanceof BuildTaskError) return { code: err.code, message: err.message };
-  if (err instanceof CapsolverError) {
-    return {
-      code: err.kind === "timeout" ? "capsolver_timeout" : "capsolver_error",
-      message: err.message,
-    };
+  if (err instanceof SolverError) {
+    if (err.kind === "timeout") return { code: "capsolver_timeout", message: err.message };
+    if (err.kind === "unsupported") {
+      return { code: "unsupported_captcha_type", message: err.message };
+    }
+    return { code: "capsolver_error", message: err.message };
   }
   return { code: "internal_error", message: (err as Error)?.message ?? "bilinmeyen hata" };
 }
@@ -78,10 +78,9 @@ export class SolveOrchestrator {
   async handleSolve(ctx: AuthedContext, req: SolveRequest): Promise<SolveResponse> {
     const cost = this.cost(req.captchaType);
 
-    // 0) Parametre doğrulama — geçersizse ücret alınmaz.
-    let task: CapsolverTask;
+    // 0) Parametre doğrulama — geçersizse ücret alınmaz (sağlayıcıdan bağımsız).
     try {
-      task = buildCapsolverTask(req);
+      buildCapsolverTask(req);
     } catch (err) {
       const { code, message } = mapError(err);
       this.deps.logger?.warn("solve_invalid", {
@@ -172,10 +171,9 @@ export class SolveOrchestrator {
         return { status: "error", code: "insufficient_credits", message: "Yetersiz kredi" };
       }
 
-      // 5) Capsolver ile çöz.
+      // 5) Çok sağlayıcılı çözücü ile çöz (otomatik fallback).
       try {
-        const raw = await this.deps.client.solve(task);
-        const solution = normalizeSolution(req.captchaType, raw);
+        const solution = await this.deps.solver.solve(req);
         await this.deps.credits.settle(ctx.userId, cost, solveId);
         this.deps.breaker.record(cost);
         await this.deps.db

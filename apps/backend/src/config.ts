@@ -26,6 +26,19 @@ export interface OnboardingConfig {
   extensionUrl?: string;
 }
 
+export interface ProvidersConfig {
+  /** Fallback sağlayıcı API anahtarları (yalnızca backend'de). */
+  anticaptchaApiKey?: string;
+  twocaptchaApiKey?: string;
+  /** Fallback: sağlayıcı denemesi başına duvar-saati zaman aşımı. */
+  attemptTimeoutMs: number;
+  /** Fallback: sağlayıcı başına yeniden deneme sayısı. */
+  retriesPerProvider: number;
+  /** Token sağlayıcıları (Anti-Captcha/2Captcha) için polling ayarları. */
+  tokenPollIntervalMs: number;
+  tokenTimeoutMs: number;
+}
+
 export interface AppConfig {
   capsolver: CapsolverConfig;
   databaseUrl: string;
@@ -35,6 +48,7 @@ export interface AppConfig {
   lemonSqueezy?: LemonSqueezyConfig;
   adminToken?: string;
   onboarding: OnboardingConfig;
+  providers: ProvidersConfig;
 }
 
 function parseVariantCredits(value: string | undefined): Record<string, number> {
@@ -87,6 +101,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ...(extensionUrl ? { extensionUrl } : {}),
   };
 
+  const providers: ProvidersConfig = {
+    attemptTimeoutMs: intOr(env["SOLVER_ATTEMPT_TIMEOUT_MS"], 130_000),
+    retriesPerProvider: intOr(env["SOLVER_RETRIES_PER_PROVIDER"], 1),
+    tokenPollIntervalMs: intOr(env["SOLVER_TOKEN_POLL_INTERVAL_MS"], 3_000),
+    tokenTimeoutMs: intOr(env["SOLVER_TOKEN_TIMEOUT_MS"], 120_000),
+  };
+  const anticaptchaApiKey = env["ANTICAPTCHA_API_KEY"];
+  if (anticaptchaApiKey) providers.anticaptchaApiKey = anticaptchaApiKey;
+  const twocaptchaApiKey = env["TWOCAPTCHA_API_KEY"];
+  if (twocaptchaApiKey) providers.twocaptchaApiKey = twocaptchaApiKey;
+
   const config: AppConfig = {
     capsolver,
     databaseUrl,
@@ -101,6 +126,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       maxSpend: intOr(env["BUDGET_MAX_SPEND"], 10_000),
     },
     onboarding,
+    providers,
   };
 
   const signingSecret = env["LEMONSQUEEZY_SIGNING_SECRET"];
