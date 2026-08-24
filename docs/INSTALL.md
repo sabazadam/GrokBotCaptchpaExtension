@@ -3,15 +3,45 @@
 Bu doküman, Grok Bot CAPTCHA Solver eklentisinin Grok bot makinelerine nasıl
 dağıtılacağını ve bir abonenin nasıl etkinleştirileceğini anlatır.
 
-## 1. Backend'i çalıştır
+## 0. Yerel hızlı başlangıç (harici Postgres GEREKMEZ)
+
+Yerelde denemek için tek gerçek gereksinim bir **Capsolver API anahtarı** ve **Chrome**.
+`DATABASE_URL` boş bırakılırsa backend gömülü (pglite) veritabanı ile çalışır.
+
+```bash
+pnpm install
+pnpm build:extension            # -> apps/extension/dist (Chrome'a yüklenecek)
+
+# Backend'i gömülü DB ile başlat (harici Postgres yok)
+CAPSOLVER_API_KEY=gercek_capsolver_anahtarin \
+ADMIN_TOKEN=uzun-rastgele-bir-deger \
+pnpm --filter @grokbot/backend start
+# -> http://localhost:3000 (şema açılışta otomatik kurulur)
+
+# Bir cihaz için aktivasyon kodu + kredi üret (kurulum promptunu da yazar)
+CAPSOLVER_API_KEY=gercek_capsolver_anahtarin \
+pnpm --filter @grokbot/backend issue-code kullanici@ornek.com 100
+```
+
+Ardından Chrome'da `chrome://extensions` → "Geliştirici modu" → "Paketlenmemiş öğe yükle"
+ile `apps/extension/dist` klasörünü seç; eklenti popup'ında Backend URL'yi
+`http://localhost:3000` yap ve üretilen aktivasyon kodunu gir.
+
+> Not: Gömülü DB tek makine/geliştirme içindir. Üretimde `DATABASE_URL` ile gerçek
+> PostgreSQL kullanın (aşağıya bakın).
+
+## 1. Backend'i çalıştır (üretim / gerçek Postgres)
 
 Gereken ortam değişkenleri için `apps/backend/.env.example` dosyasına bakın. En az:
 
 ```bash
-CAPSOLVER_API_KEY=...        # yalnızca backend'de; ASLA eklentiye konmaz
-DATABASE_URL=postgres://...  # PostgreSQL
-ADMIN_TOKEN=...              # admin uçlarını korur (aktivasyon kodu üretimi)
+CAPSOLVER_API_KEY=...         # yalnızca backend'de; ASLA eklentiye konmaz
+DATABASE_URL=postgres://...   # gerçek PostgreSQL (boşsa gömülü pglite kullanılır)
+ADMIN_TOKEN=...               # admin uçlarını korur (aktivasyon kodu üretimi)
 PUBLIC_BACKEND_URL=https://api.senin-alan-adin.com
+# Opsiyonel fallback sağlayıcılar:
+# ANTICAPTCHA_API_KEY=...     # 2. sağlayıcı
+# TWOCAPTCHA_API_KEY=...      # 3. sağlayıcı
 ```
 
 Çalıştır:

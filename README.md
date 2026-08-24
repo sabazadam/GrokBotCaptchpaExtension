@@ -31,7 +31,10 @@ pnpm --filter @grokbot/backend issue-code <email> [kredi]  # aktivasyon kodu + k
 ```
 
 Backend, Capsolver anahtarını yalnızca ortam değişkeninden okur (`apps/backend/.env.example`).
-API anahtarı ve kredi bakiyesi **asla** eklentiye gönderilmez.
+API anahtarı ve kredi bakiyesi **asla** eklentiye gönderilmez. Yerelde denemek için
+harici Postgres gerekmez: `DATABASE_URL` boşsa gömülü (pglite) veritabanı kullanılır
+(üretimde gerçek PostgreSQL için `DATABASE_URL` ayarlayın). Adım adım yerel kurulum için
+[`docs/INSTALL.md`](docs/INSTALL.md).
 
 ## Durum
 
