@@ -21,6 +21,11 @@ export interface LemonSqueezyConfig {
   variantCredits: Record<string, number>;
 }
 
+export interface OnboardingConfig {
+  publicBackendUrl: string;
+  extensionUrl?: string;
+}
+
 export interface AppConfig {
   capsolver: CapsolverConfig;
   databaseUrl: string;
@@ -28,6 +33,8 @@ export interface AppConfig {
   limits: LimitsConfig;
   budget: BudgetConfig;
   lemonSqueezy?: LemonSqueezyConfig;
+  adminToken?: string;
+  onboarding: OnboardingConfig;
 }
 
 function parseVariantCredits(value: string | undefined): Record<string, number> {
@@ -73,10 +80,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const timeoutMs = optionalInt(env["CAPSOLVER_TIMEOUT_MS"]);
   if (timeoutMs !== undefined) capsolver.timeoutMs = timeoutMs;
 
+  const port = intOr(env["PORT"], 3000);
+  const extensionUrl = env["EXTENSION_URL"];
+  const onboarding: OnboardingConfig = {
+    publicBackendUrl: env["PUBLIC_BACKEND_URL"] ?? `http://localhost:${port}`,
+    ...(extensionUrl ? { extensionUrl } : {}),
+  };
+
   const config: AppConfig = {
     capsolver,
     databaseUrl,
-    port: intOr(env["PORT"], 3000),
+    port,
     limits: {
       ratePerMinute: intOr(env["LIMIT_RATE_PER_MINUTE"], 30),
       maxConcurrent: intOr(env["LIMIT_MAX_CONCURRENT"], 5),
@@ -86,6 +100,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       windowMs: intOr(env["BUDGET_WINDOW_MS"], 60_000),
       maxSpend: intOr(env["BUDGET_MAX_SPEND"], 10_000),
     },
+    onboarding,
   };
 
   const signingSecret = env["LEMONSQUEEZY_SIGNING_SECRET"];
@@ -95,6 +110,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       variantCredits: parseVariantCredits(env["LEMONSQUEEZY_VARIANT_CREDITS"]),
     };
   }
+
+  const adminToken = env["ADMIN_TOKEN"];
+  if (adminToken) config.adminToken = adminToken;
 
   return config;
 }

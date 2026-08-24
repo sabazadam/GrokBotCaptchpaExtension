@@ -33,3 +33,14 @@ export const activateRequestSchema = z.object({
   activationCode: z.string().min(1),
   deviceLabel: z.string().optional(),
 });
+
+export const adminActivationCodeSchema = z.object({
+  email: z.string().email(),
+  deviceLabel: z.string().optional(),
+  expiresInMs: z.number().int().positive().optional(),
+});
+
+export const adminCreditsSchema = z.object({
+  email: z.string().email(),
+  credits: z.number().int().positive(),
+});

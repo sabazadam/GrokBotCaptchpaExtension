@@ -53,6 +53,8 @@ async function main(): Promise<void> {
     credits,
     orchestrator,
     ...(lemonSqueezy ? { lemonSqueezy } : {}),
+    ...(config.adminToken ? { adminToken: config.adminToken } : {}),
+    onboarding: config.onboarding,
     logger: true,
   });
 

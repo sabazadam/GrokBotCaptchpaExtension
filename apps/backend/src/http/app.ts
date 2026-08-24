@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import type { ApiErrorCode, SolveRequest } from "@grokbot/shared";
 import type { AuthService, AuthedDevice } from "../auth/deviceAuth.js";
@@ -5,14 +6,35 @@ import { AuthError } from "../auth/deviceAuth.js";
 import type { CreditStore } from "../credits/creditStore.js";
 import type { SolveOrchestrator } from "../solve/orchestrator.js";
 import type { LemonSqueezyWebhookService } from "../payments/lemonSqueezy.js";
-import { activateRequestSchema, solveRequestSchema } from "./schemas.js";
+import { buildInstallPrompt } from "../onboarding/installPrompt.js";
+import {
+  activateRequestSchema,
+  adminActivationCodeSchema,
+  adminCreditsSchema,
+  solveRequestSchema,
+} from "./schemas.js";
+
+export interface OnboardingConfig {
+  publicBackendUrl: string;
+  extensionUrl?: string;
+}
 
 export interface AppDeps {
   auth: AuthService;
   credits: CreditStore;
   orchestrator: SolveOrchestrator;
   lemonSqueezy?: LemonSqueezyWebhookService;
+  /** Admin uçlarını korur (x-admin-token). Ayarlanmazsa admin uçları kapalıdır. */
+  adminToken?: string;
+  onboarding?: OnboardingConfig;
   logger?: boolean;
+}
+
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
 }
 
 export function httpStatusForCode(code: ApiErrorCode): number {
@@ -139,6 +161,53 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     const status = res.status === "error" ? httpStatusForCode(res.code) : 200;
     return reply.code(status).send(res);
   });
+
+  const adminToken = deps.adminToken;
+  if (adminToken) {
+    const requireAdmin = (req: FastifyRequest, reply: FastifyReply): boolean => {
+      const header = req.headers["x-admin-token"];
+      if (typeof header !== "string" || !safeEqual(header, adminToken)) {
+        void reply.code(401).send({ status: "error", code: "unauthorized", message: "Admin token gerekli" });
+        return false;
+      }
+      return true;
+    };
+
+    app.post("/admin/activation-codes", async (req, reply) => {
+      if (!requireAdmin(req, reply)) return;
+      const parsed = adminActivationCodeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ status: "error", code: "invalid_params", message: parsed.error.message });
+      }
+      const userId = await deps.auth.provisionUser(parsed.data.email);
+      const code = await deps.auth.issueActivationCode(userId, parsed.data.expiresInMs);
+      const remainingCredits = await deps.credits.getBalance(userId);
+      const onboarding = deps.onboarding;
+      const installPrompt = onboarding
+        ? buildInstallPrompt({
+            activationCode: code,
+            backendUrl: onboarding.publicBackendUrl,
+            ...(onboarding.extensionUrl ? { extensionUrl: onboarding.extensionUrl } : {}),
+          })
+        : undefined;
+      return reply.code(200).send({ userId, activationCode: code, remainingCredits, installPrompt });
+    });
+
+    app.post("/admin/credits", async (req, reply) => {
+      if (!requireAdmin(req, reply)) return;
+      const parsed = adminCreditsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ status: "error", code: "invalid_params", message: parsed.error.message });
+      }
+      const userId = await deps.auth.provisionUser(parsed.data.email);
+      const balance = await deps.credits.topUp(userId, parsed.data.credits, "admin-grant");
+      return reply.code(200).send({ userId, remainingCredits: balance });
+    });
+  }
 
   const lemonSqueezy = deps.lemonSqueezy;
   if (lemonSqueezy) {
