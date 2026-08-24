@@ -232,7 +232,15 @@ Amaç: kullanıcı tek bir talimat bloğunu bota verip kolayca kursun.
 | AWS WAF | `AntiAwsWafTaskProxyLess` | token/cookie | `websiteURL` (ops. `awsKey`/`awsIv`/`awsContext`…) | `solution.cookie` (`aws-waf-token`) | Kısmi (cookie enjeksiyonu) |
 | ImageToText (OCR) | `ImageToTextTask` | recognition | `body` (base64 görsel) | `solution.text` | Uyumlu (görsel yakala→gönder) |
 | Cloudflare Challenge ("Just a moment") | `AntiCloudflareTask` | proxy-cookie | `websiteURL`, `proxy` (zorunlu) | `solution.cookies.cf_clearance` | **Sınırlı (Faz 2)** |
-| MTCaptcha / DataDome / BotDeflector / VisionEngine | destek listesinde var | değişken | dokümandan doğrulanacak | — | Roadmap |
+| DataDome (slider/interstitial) | `DatadomeSliderTask` | proxy-cookie | `captchaUrl`, `userAgent`, `proxy` (zorunlu) | `solution.cookie` (`datadome=…`) | **Sınırlı (Faz 2)** |
+| MTCaptcha / BotDeflector / VisionEngine | destek listesinde var | değişken | dokümandan doğrulanacak | — | Roadmap |
+
+**Eklenti (content script) otomatik desteği vs. backend desteği:** Eklenti yalnızca
+**güvenilir şekilde tespit edilip token'ı sayfaya enjekte edilebilen** türleri otomatik
+çözer: **reCAPTCHA v2/v3 ve Cloudflare Turnstile**. GeeTest/AWS WAF/DataDome/Cloudflare
+Challenge; proxy, sayfadan çıkarılamayan parametreler veya cookie enjeksiyonu
+gerektirdiğinden içerik betiğiyle otomatik enjekte edilmez — bunlar backend `/v1/solve`
+API'si üzerinden (programatik bot entegrasyonları için) desteklenir.
 
 **Eklenti tespiti (content script):** global JS nesneleri (`grecaptcha`, `turnstile`),
 iframe `src` desenleri (`google.com/recaptcha`, `challenges.cloudflare.com`) ve DOM
@@ -311,5 +319,6 @@ CAPTCHA'lar (oturum düşmesi/yeniden giriş) otomatik yakalanır.
   Grok bot talimatı, dağıtım (zorunlu kurulum/unlisted).
 - **M5 — Gözlemlenebilirlik & sağlamlaştırma:** metrikler, harcama alarmları, Sentry,
   ~1000 istek yük testi, kötüye kullanım senaryoları.
-- **M6 — Kapsam genişletme:** GeeTest, AWS WAF, ImageToText (OCR), ardından proxy modeli
-  gerektirenler (Cloudflare Challenge, DataDome) ve MTCaptcha/BotDeflector.
+- **M6 — Kapsam genişletme:** Backend çözüm kayıt tablosu reCAPTCHA v2/v3, Turnstile,
+  GeeTest, AWS WAF, ImageToText, Cloudflare Challenge ve DataDome'u kapsar. Kalan roadmap:
+  MTCaptcha/BotDeflector/VisionEngine ve proxy modeli türlerin eklenti tarafı otomasyonu.
