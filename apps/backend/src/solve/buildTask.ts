@@ -143,6 +143,17 @@ export function buildCapsolverTask(req: SolveRequest): CapsolverTask {
       return task;
     }
 
+    case "datadome": {
+      const task: CapsolverTask = {
+        type,
+        captchaUrl: requireField(req.captchaUrl, "captchaUrl"),
+        userAgent: requireField(req.userAgent, "userAgent"),
+        proxy: requireField(req.proxy, "proxy"),
+      };
+      if (req.websiteURL) task["websiteURL"] = req.websiteURL;
+      return task;
+    }
+
     default: {
       const exhaustive: never = req.captchaType;
       throw new BuildTaskError(

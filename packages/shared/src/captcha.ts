@@ -27,7 +27,8 @@ export type CaptchaTypeId =
   | "geetest"
   | "aws_waf"
   | "image_to_text"
-  | "cloudflare_challenge";
+  | "cloudflare_challenge"
+  | "datadome";
 
 /** Capsolver `task.type` varyantları (proxyless / kendi proxy'niz / enterprise). */
 export interface CapsolverTaskTypes {
@@ -241,6 +242,27 @@ export const CAPTCHA_REGISTRY: Record<CaptchaTypeId, CaptchaTypeSpec> = {
     notes:
       "Proxy zorunlu; cf_clearance modeli scraping içindir. Canlı tarayıcı oturumunda güvenilir kullanım Faz 2'ye bırakıldı.",
   },
+
+  datadome: {
+    id: "datadome",
+    label: "DataDome (slider / interstitial)",
+    solveModel: "proxy-cookie",
+    capsolverTaskTypes: {
+      proxied: "DatadomeSliderTask",
+      proxyless: "DatadomeSliderTask",
+    },
+    requiredTaskParams: ["captchaUrl", "userAgent", "proxy"],
+    optionalTaskParams: ["websiteURL"],
+    solutionFields: ["cookie"],
+    detection: {
+      iframeUrlIncludes: ["captcha-delivery.com", "geo.captcha-delivery.com"],
+      selectors: ["#datadome-captcha"],
+    },
+    injection: "datadome cookie'sini eşleşen proxy IP + userAgent ile uygula.",
+    extensionSupport: "limited",
+    notes:
+      "Proxy + userAgent zorunlu. captchaUrl geo.captcha-delivery.com adresidir. Scraping modeli (Faz 2).",
+  },
 };
 
 export const CAPTCHA_TYPE_IDS = Object.keys(CAPTCHA_REGISTRY) as CaptchaTypeId[];
@@ -266,4 +288,5 @@ export const DEFAULT_CREDIT_COSTS: Record<CaptchaTypeId, number> = {
   aws_waf: 2,
   image_to_text: 1,
   cloudflare_challenge: 3,
+  datadome: 3,
 };

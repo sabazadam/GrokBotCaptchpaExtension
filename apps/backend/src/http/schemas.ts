@@ -26,6 +26,7 @@ export const solveRequestSchema = z.object({
   ocrModule: z.string().optional(),
   proxy: z.string().optional(),
   userAgent: z.string().optional(),
+  captchaUrl: z.string().optional(),
   idempotencyKey: z.string().optional(),
 });
 

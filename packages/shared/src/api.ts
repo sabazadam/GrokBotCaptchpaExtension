@@ -38,6 +38,8 @@ export interface SolveRequest {
   /** proxy-cookie modeli (Cloudflare Challenge / DataDome) için. */
   proxy?: string;
   userAgent?: string;
+  /** DataDome için CAPTCHA teslim adresi (geo.captcha-delivery.com ...). */
+  captchaUrl?: string;
 
   /** Tekrarlı isteklerde çifte ücretlendirmeyi önlemek için istemci tarafı anahtar. */
   idempotencyKey?: string;
