@@ -134,4 +134,56 @@ describe("SolveOrchestrator", () => {
     if (second.status === "error") expect(second.code).toBe("daily_limit");
     expect(await credits.getBalance(userId)).toBe(9);
   });
+
+  it("başarısız idempotency anahtarı yeniden denenebilir ve tek kez ücretlendirilir", async () => {
+    await credits.topUp(userId, 10, null);
+    const keyReq: SolveRequest = { ...recaptchaReq, idempotencyKey: "retry-me" };
+    const failOrch = makeOrchestrator({ solver: failingSolver() });
+    const failed = await failOrch.handleSolve({ userId, deviceId }, keyReq);
+    expect(failed.status).toBe("error");
+    expect(await credits.getBalance(userId)).toBe(10);
+
+    const okOrch = makeOrchestrator({ solver: successSolver() });
+    const ok = await okOrch.handleSolve({ userId, deviceId }, keyReq);
+    expect(ok.status).toBe("solved");
+    expect(await credits.getBalance(userId)).toBe(9);
+  });
+
+  it("eşzamanlı failed-idempotency yeniden denemesi tek rezerv yapar", async () => {
+    await credits.topUp(userId, 10, null);
+    const keyReq: SolveRequest = { ...recaptchaReq, idempotencyKey: "race-key" };
+    const failOrch = makeOrchestrator({ solver: failingSolver() });
+    await failOrch.handleSolve({ userId, deviceId }, keyReq);
+    expect(await credits.getBalance(userId)).toBe(10);
+
+    let release!: () => void;
+    const held = new Promise<void>((r) => {
+      release = r;
+    });
+    let started!: () => void;
+    const startedP = new Promise<void>((r) => {
+      started = r;
+    });
+    const blocking: CaptchaSolver = {
+      name: "block",
+      supports: () => true,
+      solve: async () => {
+        started();
+        await held;
+        return { token: "TOKEN", raw: { gRecaptchaResponse: "TOKEN" } };
+      },
+    };
+    const orch = makeOrchestrator({ solver: blocking });
+    const p1 = orch.handleSolve({ userId, deviceId }, keyReq);
+    const p2 = orch.handleSolve({ userId, deviceId }, keyReq);
+    await startedP;
+    release();
+    const results = await Promise.all([p1, p2]);
+    const solved = results.filter((r) => r.status === "solved");
+    const limited = results.filter((r) => r.status === "error");
+    expect(solved).toHaveLength(1);
+    expect(limited).toHaveLength(1);
+    if (limited[0]?.status === "error") expect(limited[0].code).toBe("rate_limited");
+    expect(await credits.getBalance(userId)).toBe(9);
+  });
 });

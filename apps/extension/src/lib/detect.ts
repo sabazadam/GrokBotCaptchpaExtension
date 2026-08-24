@@ -4,6 +4,7 @@ export interface DetectedCaptcha {
   type: CaptchaTypeId;
   websiteKey?: string;
   pageAction?: string;
+  turnstileAction?: string;
 }
 
 function parseParam(src: string, param: string): string | undefined {
@@ -37,7 +38,7 @@ export function detectCaptchas(doc: Document): DetectedCaptcha[] {
     add({
       type: "turnstile",
       ...(key ? { websiteKey: key } : {}),
-      ...(action ? { pageAction: action } : {}),
+      ...(action ? { turnstileAction: action } : {}),
     });
   });
 
@@ -60,7 +61,7 @@ export function detectCaptchas(doc: Document): DetectedCaptcha[] {
   doc.querySelectorAll('script[src*="recaptcha/api.js"]').forEach((el) => {
     const render = parseParam(el.getAttribute("src") ?? "", "render");
     if (render && render !== "explicit") {
-      add({ type: "recaptcha_v3", websiteKey: render, pageAction: "submit" });
+      add({ type: "recaptcha_v3", websiteKey: render });
     }
   });
 
@@ -73,5 +74,6 @@ export function toSolveRequest(c: DetectedCaptcha, websiteURL: string): SolveReq
     websiteURL,
     ...(c.websiteKey ? { websiteKey: c.websiteKey } : {}),
     ...(c.pageAction ? { pageAction: c.pageAction } : {}),
+    ...(c.turnstileAction ? { turnstileAction: c.turnstileAction } : {}),
   };
 }

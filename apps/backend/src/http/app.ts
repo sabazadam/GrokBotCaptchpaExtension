@@ -128,13 +128,15 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   if (deps.metrics) {
     const metrics = deps.metrics;
     app.get("/metrics", async (req, reply) => {
-      if (deps.adminToken) {
-        const header = req.headers["x-admin-token"];
-        if (typeof header !== "string" || !safeEqual(header, deps.adminToken)) {
-          return reply
-            .code(401)
-            .send({ status: "error", code: "unauthorized", message: "Admin token gerekli" });
-        }
+      const header = req.headers["x-admin-token"];
+      if (
+        !deps.adminToken ||
+        typeof header !== "string" ||
+        !safeEqual(header, deps.adminToken)
+      ) {
+        return reply
+          .code(401)
+          .send({ status: "error", code: "unauthorized", message: "Admin token gerekli" });
       }
       return reply.code(200).send(metrics.snapshot());
     });

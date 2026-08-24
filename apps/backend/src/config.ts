@@ -1,3 +1,5 @@
+import path from "node:path";
+
 export interface CapsolverConfig {
   apiKey: string;
   baseUrl?: string;
@@ -41,11 +43,13 @@ export interface ProvidersConfig {
 
 export interface AppConfig {
   capsolver: CapsolverConfig;
-  /** Gerçek PostgreSQL bağlantısı. Boşsa gömülü (pglite) veritabanı kullanılır. */
+  /** Gerçek PostgreSQL bağlantısı. Geliştirmede boşsa gömülü (pglite) veritabanı kullanılır. */
   databaseUrl?: string;
-  /** Gömülü veritabanı için disk dizini (DATABASE_URL yoksa). */
+  /** Gömülü veritabanı için disk dizini (DATABASE_URL yoksa). Mutlak yol. */
   embeddedDataDir: string;
   port: number;
+  /** Fastify listen host. Varsayılan 0.0.0.0 (LAN). Yalnızca loopback için HOST=127.0.0.1. */
+  listenHost: string;
   limits: LimitsConfig;
   budget: BudgetConfig;
   lemonSqueezy?: LemonSqueezyConfig;
@@ -81,12 +85,18 @@ function intOr(value: string | undefined, fallback: number): number {
 
 /**
  * Ortam değişkenlerinden yapılandırmayı yükler.
- * CAPSOLVER_API_KEY ve DATABASE_URL zorunludur. API anahtarı yalnızca backend'de bulunur.
+ * CAPSOLVER_API_KEY zorunludur (yalnızca backend'de).
+ * DATABASE_URL üretimde (NODE_ENV=production) zorunludur; geliştirmede boşsa gömülü pglite kullanılır.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const apiKey = env["CAPSOLVER_API_KEY"];
   if (!apiKey) throw new Error("CAPSOLVER_API_KEY ortam değişkeni gerekli");
-  const databaseUrl = env["DATABASE_URL"];
+  const databaseUrl = env["DATABASE_URL"]?.trim() || undefined;
+  if (!databaseUrl && env["NODE_ENV"] === "production") {
+    throw new Error(
+      "DATABASE_URL ortam değişkeni üretimde gerekli (gömülü pglite yalnızca geliştirme içindir)",
+    );
+  }
 
   const capsolver: CapsolverConfig = { apiKey };
   const baseUrl = env["CAPSOLVER_BASE_URL"];
@@ -117,8 +127,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const config: AppConfig = {
     capsolver,
     ...(databaseUrl ? { databaseUrl } : {}),
-    embeddedDataDir: env["PGLITE_DATA_DIR"] ?? "./.data/pglite",
+    embeddedDataDir: path.resolve(env["PGLITE_DATA_DIR"] ?? ".data/pglite"),
     port,
+    listenHost: env["HOST"]?.trim() || "0.0.0.0",
     limits: {
       ratePerMinute: intOr(env["LIMIT_RATE_PER_MINUTE"], 30),
       maxConcurrent: intOr(env["LIMIT_MAX_CONCURRENT"], 5),

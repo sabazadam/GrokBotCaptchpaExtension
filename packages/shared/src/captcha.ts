@@ -110,8 +110,8 @@ export const CAPTCHA_REGISTRY: Record<CaptchaTypeId, CaptchaTypeSpec> = {
       enterpriseProxyless: "ReCaptchaV3EnterpriseTaskProxyLess",
       enterprise: "ReCaptchaV3EnterpriseTask",
     },
-    requiredTaskParams: ["websiteURL", "websiteKey", "pageAction"],
-    optionalTaskParams: ["enterprisePayload", "isSession", "apiDomain", "proxy"],
+    requiredTaskParams: ["websiteURL", "websiteKey"],
+    optionalTaskParams: ["pageAction", "enterprisePayload", "isSession", "apiDomain", "proxy"],
     solutionFields: ["gRecaptchaResponse"],
     detection: {
       globals: ["grecaptcha"],
@@ -122,7 +122,8 @@ export const CAPTCHA_REGISTRY: Record<CaptchaTypeId, CaptchaTypeSpec> = {
     injection:
       "grecaptcha.execute action'ı için üretilen token'ı ilgili gizli alana/callback'e ilet.",
     extensionSupport: "full",
-    notes: "v3 için pageAction (grecaptcha.execute içindeki action) gereklidir.",
+    notes:
+      "v3 için pageAction (grecaptcha.execute içindeki action) önerilir; yoksa sağlayıcı varsayılanını kullanır. Sahte 'submit' uydurulmamalı.",
   },
 
   turnstile: {

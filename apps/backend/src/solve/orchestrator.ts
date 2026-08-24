@@ -112,11 +112,16 @@ export class SolveOrchestrator {
           return { status: "error", code: "rate_limited", message: "Aynı istek işleniyor" };
         }
         // failed -> aynı satırı yeniden kullan (iade edilmişti, yeniden denenebilir).
-        solveId = existing.id;
-        await this.deps.db
+        // Atomik claim: eşzamanlı yeniden denemeler çifte rezerv/çözüm üretmesin.
+        const claimed = await this.deps.db
           .update(solves)
           .set({ status: "pending", resolvedAt: null })
-          .where(eq(solves.id, existing.id));
+          .where(and(eq(solves.id, existing.id), eq(solves.status, "failed")))
+          .returning({ id: solves.id });
+        if (!claimed[0]) {
+          return { status: "error", code: "rate_limited", message: "Aynı istek işleniyor" };
+        }
+        solveId = claimed[0].id;
       }
     }
 

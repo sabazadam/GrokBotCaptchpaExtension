@@ -23,6 +23,8 @@ docs/INSTALL.md   Kurulum, dağıtım ve onboarding rehberi
 
 **Önkoşullar:** Node 22+, [pnpm](https://pnpm.io), Google Chrome ve bir **Capsolver API
 anahtarı**. Yerelde denemek için harici veritabanı gerekmez (gömülü pglite kullanılır).
+Gömülü DB **tek süreçlidir**: sunucu açıkken `issue-code` aynı dosya DB'sini açmaz;
+`ADMIN_TOKEN` ile çalışan backend'in admin API'sini kullanır.
 
 ### Hızlı başlangıç
 
@@ -34,8 +36,8 @@ pnpm build:extension            # -> apps/extension/dist (Chrome'a yüklenecek)
 CAPSOLVER_API_KEY=capsolver_anahtarin ADMIN_TOKEN=uzun-rastgele-bir-deger \
   pnpm --filter @grokbot/backend start        # -> http://localhost:3000
 
-# 2) Bir cihaz için aktivasyon kodu + kredi üret (kurulum promptunu da yazar)
-CAPSOLVER_API_KEY=capsolver_anahtarin \
+# 2) Bir cihaz için aktivasyon kodu + kredi üret (sunucu açıkken ADMIN_TOKEN zorunlu)
+CAPSOLVER_API_KEY=capsolver_anahtarin ADMIN_TOKEN=uzun-rastgele-bir-deger \
   pnpm --filter @grokbot/backend issue-code sen@ornek.com 100
 ```
 
@@ -45,20 +47,40 @@ CAPSOLVER_API_KEY=capsolver_anahtarin \
    **Aktivasyon kodu**'nu yapıştır → **Etkinleştir**. Kalan kredi görünür.
 5. reCAPTCHA v2/v3 veya Turnstile içeren bir sayfaya git → otomatik çözülür.
 
+Yalnızca bu makineden erişim için `HOST=127.0.0.1` kullanın. `NODE_ENV=production`
+iken gömülü pglite **kullanılmaz**; gerçek `DATABASE_URL` gerekir.
+
 ### Mac Mini (ana sunucu) + MacBook (istemci) senaryosu
 
 Backend'i Mac Mini'de çalıştırıp MacBook'un Chrome eklentisinden bağlanmak için:
 
-1. **Mac Mini'de** backend'i başlat (yukarıdaki 1. adım). Sunucu `0.0.0.0` dinler, yani
-   yerel ağdan erişilebilir. macOS "gelen bağlantılara izin ver" derse **izin ver**.
-2. Mac Mini'nin yerel ağ IP'sini öğren: `ipconfig getifaddr en0` (ör. `192.168.1.42`).
-3. **Mac Mini'de** o cihaz için aktivasyon kodu üret (2. adım).
-4. **MacBook'ta** eklentiyi yükle (3. adım) ve popup'ta **Backend URL**'yi Mac Mini'nin
-   IP'siyle gir: `http://192.168.1.42:3000`. Aktivasyon kodunu gir → Etkinleştir.
-5. İki cihaz **aynı yerel ağda** olmalı. Ağ dışından (internet üzerinden) bağlanacaksan
-   port yönlendirme/tünel + tercihen HTTPS gerekir.
+1. **Mac Mini'de** backend'i LAN'dan erişilebilir başlatın. HTTP düz metindir
+   (aktivasyon kodu ve cihaz token'ı); yalnızca güvendiğiniz yerel ağda kullanın,
+   ağı dışarı açmayın.
 
-Sunucuyu sürekli açık tutmak için `tmux`, `pm2` veya bir `launchd` servisi kullanabilirsin.
+```bash
+CAPSOLVER_API_KEY=capsolver_anahtarin ADMIN_TOKEN=uzun-rastgele-bir-deger \
+HOST=0.0.0.0 PUBLIC_BACKEND_URL=http://192.168.1.42:3000 \
+  pnpm --filter @grokbot/backend start
+```
+
+   macOS "gelen bağlantılara izin ver" derse **izin ver**.
+2. Mac Mini'nin yerel ağ IP'sini öğrenin: `ipconfig getifaddr en0` (ör. `192.168.1.42`)
+   ve `PUBLIC_BACKEND_URL`'yi buna göre ayarlayın.
+3. **Mac Mini'de** o cihaz için aktivasyon kodu üretin (`ADMIN_TOKEN` aynı olmalı):
+
+```bash
+CAPSOLVER_API_KEY=capsolver_anahtarin ADMIN_TOKEN=uzun-rastgele-bir-deger \
+PUBLIC_BACKEND_URL=http://192.168.1.42:3000 \
+  pnpm --filter @grokbot/backend issue-code sen@ornek.com 100
+```
+
+4. **MacBook'ta** eklentiyi yükleyin ve popup'ta **Backend URL**'yi Mac Mini'nin
+   IP'siyle girin: `http://192.168.1.42:3000`. Aktivasyon kodunu girin → Etkinleştir.
+5. İki cihaz **aynı yerel ağda** olmalı. Ağ dışından (internet üzerinden) bağlanacaksanız
+   port yönlendirme/tünel + **HTTPS** gerekir; düz HTTP ile token sızdırırsınız.
+
+Sunucuyu sürekli açık tutmak için `tmux`, `pm2` veya bir `launchd` servisi kullanabilirsiniz.
 Üretim/çok makineli dağıtım (gerçek PostgreSQL, kurumsal zorunlu kurulum, ödeme webhook'u)
 için: [`docs/INSTALL.md`](docs/INSTALL.md).
 
@@ -84,7 +106,7 @@ pnpm --filter @grokbot/backend issue-code <email> [kredi]  # aktivasyon kodu + k
 Backend, Capsolver anahtarını yalnızca ortam değişkeninden okur (`apps/backend/.env.example`).
 API anahtarı ve kredi bakiyesi **asla** eklentiye gönderilmez. Yerelde denemek için
 harici Postgres gerekmez: `DATABASE_URL` boşsa gömülü (pglite) veritabanı kullanılır
-(üretimde gerçek PostgreSQL için `DATABASE_URL` ayarlayın). Adım adım yerel kurulum için
+(`NODE_ENV=production` iken `DATABASE_URL` zorunludur). Adım adım yerel kurulum için
 [`docs/INSTALL.md`](docs/INSTALL.md).
 
 ## Durum

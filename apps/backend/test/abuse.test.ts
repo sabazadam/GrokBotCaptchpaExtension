@@ -100,4 +100,16 @@ describe("kötüye kullanım / izolasyon", () => {
     expect(typeof res.json().solvesTotal).toBe("number");
     await app.close();
   });
+
+  it("/metrics admin token yapılandırılmadan 401 (fail-closed)", async () => {
+    const app = buildApp({
+      auth,
+      credits,
+      orchestrator: orch,
+      metrics,
+    });
+    const res = await app.inject({ method: "GET", url: "/metrics" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
 });
