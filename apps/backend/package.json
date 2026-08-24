@@ -7,7 +7,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p ../../tsconfig.json",
     "dev": "tsx watch src/main.ts",
-    "start": "tsx src/main.ts"
+    "start": "tsx src/main.ts",
+    "issue-code": "tsx src/scripts/issueActivation.ts"
   },
   "dependencies": {
     "@grokbot/shared": "workspace:*",
