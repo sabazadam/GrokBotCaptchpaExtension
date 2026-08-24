@@ -170,13 +170,13 @@ Böylece "oturum düşünce elle CAPTCHA çözme" derdi ortadan kalkar.
 
 | CAPTCHA türü            | Capsolver maliyeti (kalibre edilecek) | Kredi maliyeti | Not |
 |-------------------------|----------------------------------------|----------------|-----|
-| reCAPTCHA v2            | TBD                                    | TBD            |     |
-| reCAPTCHA v3 / Enterprise | TBD                                  | TBD            |     |
-| hCaptcha                | TBD                                    | TBD            |     |
+| reCAPTCHA v2            | TBD                                    | TBD            | Öncelik (kinguin) |
+| reCAPTCHA v3 / Enterprise | TBD                                  | TBD            | Öncelik (kinguin) |
 | Cloudflare Turnstile    | TBD                                    | TBD            |     |
-| Cloudflare Challenge    | TBD                                    | TBD            | Öncelik (kinguin) |
-| FunCaptcha / Arkose     | TBD                                    | TBD            | Genelde daha pahalı |
-| ImageToText / diğer     | TBD                                    | TBD            |     |
+| GeeTest v3/v4           | TBD                                    | TBD            |     |
+| AWS WAF                 | TBD                                    | TBD            |     |
+| ImageToText (OCR)       | TBD                                    | TBD            |     |
+| Cloudflare Challenge    | TBD                                    | TBD            | Proxy modeli (Faz 2) |
 
 - Kredi→USD kuru, **her türün gerçek maliyetinin üstünde marj** bırakacak şekilde
   belirlenir; başarısız denemeler için tampon eklenir.
@@ -209,19 +209,43 @@ Amaç: kullanıcı tek bir talimat bloğunu bota verip kolayca kursun.
 3. Kullanıcı bu talimatı Grok botuna yapıştırır; bot: eklentiyi kurar/etkinleştirir →
    popup'ta aktivasyon kodunu girer → kredi bakiyesi görününce hazırdır.
 
-## 11. CAPTCHA Tespiti ve Desteklenen Türler
+## 11. CAPTCHA Tespiti ve Desteklenen Türler (Capsolver canlı dokümanına göre)
 
-Capsolver'ın desteklediği doğrulandı: reCAPTCHA v2/v3/Enterprise, hCaptcha, Cloudflare
-Turnstile, Cloudflare Challenge, FunCaptcha/Arkose, GeeTest, DataDome, AWS WAF,
-ImageToText (50+ tür).
+> **Önemli düzeltme:** Capsolver'ın **güncel resmi dokümanında hCaptcha ve
+> FunCaptcha/Arkose artık listelenmiyor** (ilgili sayfalar 404 dönüyor). Bu yüzden
+> tasarımda bu ikisine güvenmiyoruz. Aşağıdaki tablo `docs.capsolver.com` üzerinden
+> doğrulanmış güncel türleri ve `createTask > task.type` değerlerini içerir.
 
-Eklenti tespiti (content script): bilinen iframe/`div` seçicileri ve global JS
-nesneleri (ör. `grecaptcha`, `hcaptcha`, `turnstile`) taranarak tür ve `sitekey`
-çıkarılır. **Öncelik sırası (kinguin senaryosu):**
-1. Cloudflare Turnstile / Challenge
-2. reCAPTCHA v2/v3
-3. hCaptcha
-4. (sonra) FunCaptcha/Arkose, GeeTest, DataDome, AWS WAF, ImageToText
+**Çözüm modelleri:**
+- **token (async):** `createTask` → `getTaskResult` polling ile token alınır; eklenti
+  token'ı sayfaya enjekte eder. **Tarayıcı eklentisi için ideal model.**
+- **recognition (senkron):** `createTask` sonucu doğrudan döner (görsel/OCR).
+- **proxy-cookie (async):** proxy zorunlu, sonuç bir cookie (ör. `cf_clearance`).
+  Bu model **scraping** içindir; canlı tarayıcı oturumuna uydurmak zordur → Faz 2.
+
+| CAPTCHA türü | `task.type` (proxyless) | Model | Zorunlu parametreler | Çözüm alanı | Eklenti uyumu |
+|---|---|---|---|---|---|
+| reCAPTCHA v2 (+ Enterprise) | `ReCaptchaV2TaskProxyLess` (`ReCaptchaV2EnterpriseTaskProxyLess`) | token | `websiteURL`, `websiteKey` | `solution.gRecaptchaResponse` | Tam |
+| reCAPTCHA v3 (+ Enterprise) | `ReCaptchaV3TaskProxyLess` (`ReCaptchaV3EnterpriseTaskProxyLess`) | token | `websiteURL`, `websiteKey`, `pageAction` | `solution.gRecaptchaResponse` | Tam |
+| Cloudflare Turnstile | `AntiTurnstileTaskProxyLess` | token | `websiteURL`, `websiteKey` (ops. `metadata.action`/`cdata`) | `solution.token` | Tam |
+| GeeTest v3/v4 | `GeeTestTaskProxyLess` | token | v3: `gt`+`challenge`; v4: `captchaId` (+`websiteURL`) | v3: `validate`/`seccode`; v4: `captcha_output`/`lot_number`/`pass_token` | Uyumlu |
+| AWS WAF | `AntiAwsWafTaskProxyLess` | token/cookie | `websiteURL` (ops. `awsKey`/`awsIv`/`awsContext`…) | `solution.cookie` (`aws-waf-token`) | Kısmi (cookie enjeksiyonu) |
+| ImageToText (OCR) | `ImageToTextTask` | recognition | `body` (base64 görsel) | `solution.text` | Uyumlu (görsel yakala→gönder) |
+| Cloudflare Challenge ("Just a moment") | `AntiCloudflareTask` | proxy-cookie | `websiteURL`, `proxy` (zorunlu) | `solution.cookies.cf_clearance` | **Sınırlı (Faz 2)** |
+| MTCaptcha / DataDome / BotDeflector / VisionEngine | destek listesinde var | değişken | dokümandan doğrulanacak | — | Roadmap |
+
+**Eklenti tespiti (content script):** global JS nesneleri (`grecaptcha`, `turnstile`),
+iframe `src` desenleri (`google.com/recaptcha`, `challenges.cloudflare.com`) ve DOM
+öznitelikleri (`.g-recaptcha[data-sitekey]`, `.cf-turnstile[data-sitekey]`) taranarak
+tür + `sitekey` + (v3 için) `action` çıkarılır. `MutationObserver` ile yeniden beliren
+CAPTCHA'lar (oturum düşmesi/yeniden giriş) otomatik yakalanır.
+
+**Öncelik sırası (kinguin reCAPTCHA v2/v3 kullanıyor + genel web):**
+1. reCAPTCHA v2 / v3
+2. Cloudflare Turnstile
+3. ImageToText (OCR)
+4. GeeTest, AWS WAF
+5. Cloudflare Challenge / DataDome (proxy modeli — Faz 2)
 
 ## 12. Önerilen Teknoloji Yığını
 
@@ -281,10 +305,11 @@ nesneleri (ör. `grecaptcha`, `hcaptcha`, `turnstile`) taranarak tür ve `siteke
 - **M2 — Ödeme:** Lemon Squeezy ürünleri + imza doğrulamalı webhook → kredi yükleme,
   idempotent webhook işleme, bakiye API'si.
 - **M3 — Eklenti MVP:** WXT MV3, popup (aktivasyon kodu + kredi + aç/kapa), background
-  worker, content-script tespiti (Turnstile/Challenge, reCAPTCHA v2/v3, hCaptcha),
-  çözüm orkestrasyonu + token enjeksiyonu. **kinguin.net üzerinde test.**
+  worker, content-script tespiti (reCAPTCHA v2/v3, Cloudflare Turnstile), çözüm
+  orkestrasyonu + token enjeksiyonu. **kinguin.net üzerinde test.**
 - **M4 — Onboarding/kurulum:** dashboard'da aktivasyon kodu üretimi, kopyala-yapıştır
   Grok bot talimatı, dağıtım (zorunlu kurulum/unlisted).
 - **M5 — Gözlemlenebilirlik & sağlamlaştırma:** metrikler, harcama alarmları, Sentry,
   ~1000 istek yük testi, kötüye kullanım senaryoları.
-- **M6 — Kapsam genişletme:** FunCaptcha/Arkose, GeeTest, DataDome, AWS WAF, ImageToText.
+- **M6 — Kapsam genişletme:** GeeTest, AWS WAF, ImageToText (OCR), ardından proxy modeli
+  gerektirenler (Cloudflare Challenge, DataDome) ve MTCaptcha/BotDeflector.
