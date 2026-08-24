@@ -5,8 +5,23 @@ export interface CapsolverConfig {
   timeoutMs?: number;
 }
 
+export interface LimitsConfig {
+  ratePerMinute: number;
+  maxConcurrent: number;
+  dailyMax: number;
+}
+
+export interface BudgetConfig {
+  windowMs: number;
+  maxSpend: number;
+}
+
 export interface AppConfig {
   capsolver: CapsolverConfig;
+  databaseUrl: string;
+  port: number;
+  limits: LimitsConfig;
+  budget: BudgetConfig;
 }
 
 function optionalInt(value: string | undefined): number | undefined {
@@ -15,21 +30,40 @@ function optionalInt(value: string | undefined): number | undefined {
   return Number.isNaN(n) ? undefined : n;
 }
 
+function intOr(value: string | undefined, fallback: number): number {
+  return optionalInt(value) ?? fallback;
+}
+
 /**
  * Ortam değişkenlerinden yapılandırmayı yükler.
- * CAPSOLVER_API_KEY zorunludur ve yalnızca backend'de bulunur — asla eklentiye gönderilmez.
+ * CAPSOLVER_API_KEY ve DATABASE_URL zorunludur. API anahtarı yalnızca backend'de bulunur.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const apiKey = env["CAPSOLVER_API_KEY"];
-  if (!apiKey) {
-    throw new Error("CAPSOLVER_API_KEY ortam değişkeni gerekli");
-  }
-  const config: CapsolverConfig = { apiKey };
+  if (!apiKey) throw new Error("CAPSOLVER_API_KEY ortam değişkeni gerekli");
+  const databaseUrl = env["DATABASE_URL"];
+  if (!databaseUrl) throw new Error("DATABASE_URL ortam değişkeni gerekli");
+
+  const capsolver: CapsolverConfig = { apiKey };
   const baseUrl = env["CAPSOLVER_BASE_URL"];
-  if (baseUrl) config.baseUrl = baseUrl;
+  if (baseUrl) capsolver.baseUrl = baseUrl;
   const pollIntervalMs = optionalInt(env["CAPSOLVER_POLL_INTERVAL_MS"]);
-  if (pollIntervalMs !== undefined) config.pollIntervalMs = pollIntervalMs;
+  if (pollIntervalMs !== undefined) capsolver.pollIntervalMs = pollIntervalMs;
   const timeoutMs = optionalInt(env["CAPSOLVER_TIMEOUT_MS"]);
-  if (timeoutMs !== undefined) config.timeoutMs = timeoutMs;
-  return { capsolver: config };
+  if (timeoutMs !== undefined) capsolver.timeoutMs = timeoutMs;
+
+  return {
+    capsolver,
+    databaseUrl,
+    port: intOr(env["PORT"], 3000),
+    limits: {
+      ratePerMinute: intOr(env["LIMIT_RATE_PER_MINUTE"], 30),
+      maxConcurrent: intOr(env["LIMIT_MAX_CONCURRENT"], 5),
+      dailyMax: intOr(env["LIMIT_DAILY_MAX"], 5000),
+    },
+    budget: {
+      windowMs: intOr(env["BUDGET_WINDOW_MS"], 60_000),
+      maxSpend: intOr(env["BUDGET_MAX_SPEND"], 10_000),
+    },
+  };
 }
