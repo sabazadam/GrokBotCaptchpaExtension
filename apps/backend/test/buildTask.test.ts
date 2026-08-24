@@ -110,6 +110,45 @@ describe("buildCapsolverTask", () => {
     ).toThrowError(BuildTaskError);
   });
 
+  it("AWS WAF websiteURL ile kurulur (proxyless)", () => {
+    const task = buildCapsolverTask({ captchaType: "aws_waf", websiteURL: "https://x.com" });
+    expect(task.type).toBe("AntiAwsWafTaskProxyLess");
+    expect(task["websiteURL"]).toBe("https://x.com");
+  });
+
+  it("AWS WAF proxy verilince proxied varyant seçilir", () => {
+    const task = buildCapsolverTask({
+      captchaType: "aws_waf",
+      websiteURL: "https://x.com",
+      proxy: "http:1.2.3.4:8080:u:p",
+    });
+    expect(task.type).toBe("AntiAwsWafTask");
+  });
+
+  it("DataDome captchaUrl + userAgent + proxy ile kurulur", () => {
+    const task = buildCapsolverTask({
+      captchaType: "datadome",
+      websiteURL: "https://site.com",
+      captchaUrl: "https://geo.captcha-delivery.com/captcha/?t=fe",
+      userAgent: "Mozilla/5.0",
+      proxy: "1.2.3.4:8080:u:p",
+    });
+    expect(task.type).toBe("DatadomeSliderTask");
+    expect(task["captchaUrl"]).toContain("captcha-delivery.com");
+    expect(task["userAgent"]).toBe("Mozilla/5.0");
+  });
+
+  it("DataDome eksik proxy hata verir", () => {
+    expect(() =>
+      buildCapsolverTask({
+        captchaType: "datadome",
+        websiteURL: "https://site.com",
+        captchaUrl: "https://geo.captcha-delivery.com/captcha/?t=fe",
+        userAgent: "Mozilla/5.0",
+      }),
+    ).toThrowError(BuildTaskError);
+  });
+
   it("desteklenmeyen tür hata kodu döner", () => {
     try {
       buildCapsolverTask({
