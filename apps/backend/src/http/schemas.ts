@@ -8,6 +8,7 @@ export const solveRequestSchema = z.object({
   websiteURL: z.string().min(1),
   websiteKey: z.string().optional(),
   pageAction: z.string().optional(),
+  minScore: z.number().min(0).max(1).optional(),
   isInvisible: z.boolean().optional(),
   isEnterprise: z.boolean().optional(),
   enterprisePayload: z.record(z.string(), z.unknown()).optional(),

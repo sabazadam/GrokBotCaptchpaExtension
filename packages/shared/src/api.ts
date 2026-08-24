@@ -12,6 +12,8 @@ export interface SolveRequest {
 
   /** reCAPTCHA v3 (ve bazı v2) için action. */
   pageAction?: string;
+  /** reCAPTCHA v3 için istenen minimum skor (0.3 / 0.7 / 0.9). Bazı sağlayıcılarda zorunlu. */
+  minScore?: number;
   /** reCAPTCHA v2 invisible modu. */
   isInvisible?: boolean;
   /** Enterprise varyantını seç. */
