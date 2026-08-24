@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Grok CAPTCHA</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        width: 320px;
+        margin: 0;
+        padding: 16px;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      h1 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+      .dot { width: 10px; height: 10px; border-radius: 50%; background: #64748b; }
+      .dot.on { background: #22c55e; }
+      .dot.off { background: #ef4444; }
+      .row { margin-bottom: 12px; }
+      label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+      input[type="text"] {
+        width: 100%; box-sizing: border-box; padding: 8px; border-radius: 8px;
+        border: 1px solid #334155; background: #1e293b; color: #e2e8f0; font-size: 13px;
+      }
+      button {
+        width: 100%; padding: 9px; border: none; border-radius: 8px; cursor: pointer;
+        background: #6366f1; color: white; font-size: 13px; font-weight: 600;
+      }
+      button.secondary { background: #334155; }
+      .balance { font-size: 22px; font-weight: 700; }
+      .muted { font-size: 12px; color: #94a3b8; }
+      .switch { display: flex; align-items: center; justify-content: space-between; }
+      .msg { font-size: 12px; margin-top: 8px; min-height: 16px; }
+      .msg.err { color: #f87171; }
+      .msg.ok { color: #4ade80; }
+      hr { border: none; border-top: 1px solid #334155; margin: 14px 0; }
+    </style>
+  </head>
+  <body>
+    <h1><span id="statusDot" class="dot"></span> Grok CAPTCHA Çözücü</h1>
+
+    <div class="row">
+      <label>Kalan kredi</label>
+      <div class="balance" id="balance">—</div>
+      <div class="muted" id="tokenState">Cihaz etkinleştirilmedi</div>
+    </div>
+
+    <div class="row switch">
+      <span>Otomatik çözme</span>
+      <button id="toggle" class="secondary" style="width:auto; padding:6px 12px;">—</button>
+    </div>
+
+    <hr />
+
+    <div class="row">
+      <label for="code">Aktivasyon kodu</label>
+      <input type="text" id="code" placeholder="ABCD-EFGH-JKLM-NPQR" autocomplete="off" />
+    </div>
+    <div class="row">
+      <button id="activate">Etkinleştir</button>
+    </div>
+
+    <div class="row">
+      <label for="backend">Backend URL</label>
+      <input type="text" id="backend" placeholder="https://api.example.com" />
+    </div>
+
+    <div class="msg" id="msg"></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
