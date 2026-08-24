@@ -76,4 +76,12 @@ describe("handleMessage", () => {
     );
     expect(res).toMatchObject({ status: "solved" });
   });
+
+  it("bilinmeyen mesaj türü invalid_params döner, solve çağırmaz", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await handleMessage({ kind: "nope" } as never, enabledWithToken);
+    expect(res).toMatchObject({ status: "error", code: "invalid_params" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

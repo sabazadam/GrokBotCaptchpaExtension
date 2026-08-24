@@ -5,9 +5,9 @@ const captchaTypeEnum = z.enum(CAPTCHA_TYPE_IDS as [CaptchaTypeId, ...CaptchaTyp
 
 export const solveRequestSchema = z.object({
   captchaType: captchaTypeEnum,
-  websiteURL: z.string().min(1),
-  websiteKey: z.string().optional(),
-  pageAction: z.string().optional(),
+  websiteURL: z.string().min(1).max(2048),
+  websiteKey: z.string().max(512).optional(),
+  pageAction: z.string().max(256).optional(),
   minScore: z.number().min(0).max(1).optional(),
   isInvisible: z.boolean().optional(),
   isEnterprise: z.boolean().optional(),
@@ -28,7 +28,7 @@ export const solveRequestSchema = z.object({
   proxy: z.string().optional(),
   userAgent: z.string().optional(),
   captchaUrl: z.string().optional(),
-  idempotencyKey: z.string().optional(),
+  idempotencyKey: z.string().min(1).max(128).optional(),
 });
 
 export const activateRequestSchema = z.object({

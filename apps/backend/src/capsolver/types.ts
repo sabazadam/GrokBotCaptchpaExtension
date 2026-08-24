@@ -8,7 +8,7 @@ export interface CapsolverCreateTaskResponse {
   errorId: number;
   errorCode?: string | null;
   errorDescription?: string | null;
-  taskId?: string;
+  taskId?: string | number;
   /** Recognition görevleri (ör. ImageToTextTask) sonucu doğrudan burada döndürür. */
   status?: CapsolverTaskStatus;
   solution?: Record<string, unknown>;
@@ -20,7 +20,7 @@ export interface CapsolverGetTaskResultResponse {
   errorId: number;
   errorCode?: string | null;
   errorDescription?: string | null;
-  taskId?: string;
+  taskId?: string | number;
   status?: CapsolverTaskStatus;
   solution?: Record<string, unknown>;
 }

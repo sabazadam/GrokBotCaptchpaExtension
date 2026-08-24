@@ -15,7 +15,8 @@ interface CreateTaskResponse {
   errorId: number;
   errorCode?: string | null;
   errorDescription?: string | null;
-  taskId?: string;
+  /** Anti-Captcha/2Captcha sayı, bazı uyumlu API'ler dize döndürür. */
+  taskId?: string | number;
 }
 
 interface GetTaskResultResponse {
@@ -39,8 +40,14 @@ export interface TaskApiClientOptions {
 
 const DEFAULT_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_TIMEOUT_MS = 120_000;
+/** Tek HTTP çağrısı için üst sınır — asılı soketlerin poll döngüsünü kilitlemesini önler. */
+const MAX_REQUEST_TIMEOUT_MS = 30_000;
 const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError");
+}
 
 /**
  * Anti-Captcha uyumlu JSON API istemcisi (Anti-Captcha ve 2Captcha aynı şemayı kullanır):
@@ -60,22 +67,83 @@ export class TaskApiClient {
     this.sleep = options.sleepImpl ?? defaultSleep;
   }
 
-  private async post<T>(path: string, body: Record<string, unknown>): Promise<T> {
-    const res = await this.fetchImpl(`${this.options.baseUrl}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientKey: this.options.apiKey, ...body }),
-    });
-    if (!res.ok) {
-      throw new TaskApiError(`${path} HTTP ${res.status}`, "error", `HTTP_${res.status}`);
-    }
-    return (await res.json()) as T;
+  private requestTimeoutMs(): number {
+    return Math.min(MAX_REQUEST_TIMEOUT_MS, Math.max(this.timeoutMs, 1));
   }
 
-  async getBalance(): Promise<number> {
+  private async post<T>(
+    path: string,
+    body: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    if (signal?.aborted) {
+      throw new TaskApiError("istek iptal edildi", "timeout");
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.requestTimeoutMs());
+    const onParentAbort = (): void => controller.abort();
+    signal?.addEventListener("abort", onParentAbort);
+    try {
+      const res = await this.fetchImpl(`${this.options.baseUrl}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // clientKey sona yazılır; gövde anahtarı ezemez.
+        body: JSON.stringify({ ...body, clientKey: this.options.apiKey }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw new TaskApiError(`${path} HTTP ${res.status}`, "error", `HTTP_${res.status}`);
+      }
+      try {
+        return (await res.json()) as T;
+      } catch {
+        throw new TaskApiError(`${path} geçersiz JSON`, "error");
+      }
+    } catch (err) {
+      if (err instanceof TaskApiError) throw err;
+      if (isAbortError(err)) {
+        throw new TaskApiError("istek zaman aşımı veya iptal", "timeout");
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onParentAbort);
+    }
+  }
+
+  private async wait(ms: number, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) throw new TaskApiError("istek iptal edildi", "timeout");
+    if (!signal) {
+      await this.sleep(ms);
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      const onAbort = (): void => {
+        cleanup();
+        reject(new TaskApiError("istek iptal edildi", "timeout"));
+      };
+      const cleanup = (): void => {
+        signal.removeEventListener("abort", onAbort);
+      };
+      signal.addEventListener("abort", onAbort);
+      void this.sleep(ms).then(
+        () => {
+          cleanup();
+          resolve();
+        },
+        (err: unknown) => {
+          cleanup();
+          reject(err);
+        },
+      );
+    });
+  }
+
+  async getBalance(signal?: AbortSignal): Promise<number> {
     const data = await this.post<{ errorId: number; balance?: number; errorCode?: string | null }>(
       "/getBalance",
       {},
+      signal,
     );
     if (data.errorId !== 0) {
       throw new TaskApiError("getBalance hatası", "error", data.errorCode ?? undefined);
@@ -83,11 +151,11 @@ export class TaskApiClient {
     return data.balance ?? 0;
   }
 
-  async solve(task: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async solve(task: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> {
     const createBody: Record<string, unknown> = { task };
     if (this.options.softId !== undefined) createBody["softId"] = this.options.softId;
 
-    const created = await this.post<CreateTaskResponse>("/createTask", createBody);
+    const created = await this.post<CreateTaskResponse>("/createTask", createBody, signal);
     if (created.errorId !== 0) {
       throw new TaskApiError(
         created.errorDescription ?? "createTask hatası",
@@ -96,12 +164,18 @@ export class TaskApiClient {
       );
     }
     const taskId = created.taskId;
-    if (!taskId) throw new TaskApiError("createTask taskId döndürmedi", "error");
+    if (taskId === undefined || taskId === null || taskId === "") {
+      throw new TaskApiError("createTask taskId döndürmedi", "error");
+    }
 
     const deadline = Date.now() + this.timeoutMs;
     while (Date.now() < deadline) {
-      await this.sleep(this.pollIntervalMs);
-      const result = await this.post<GetTaskResultResponse>("/getTaskResult", { taskId });
+      await this.wait(this.pollIntervalMs, signal);
+      const result = await this.post<GetTaskResultResponse>(
+        "/getTaskResult",
+        { taskId },
+        signal,
+      );
       if (result.errorId !== 0) {
         throw new TaskApiError(
           result.errorDescription ?? "getTaskResult hatası",

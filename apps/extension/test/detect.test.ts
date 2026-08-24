@@ -35,13 +35,13 @@ describe("detectCaptchas", () => {
     );
   });
 
-  it("reCAPTCHA v3'ü api.js?render ile tespit eder", () => {
+  it("reCAPTCHA v3'ü api.js?render ile tespit eder (sahte pageAction uydurmaz)", () => {
     document.body.innerHTML =
       '<script src="https://www.google.com/recaptcha/api.js?render=V3_SITEKEY"></script>';
     const found = detectCaptchas(document);
-    expect(found.some((c) => c.type === "recaptcha_v3" && c.websiteKey === "V3_SITEKEY")).toBe(
-      true,
-    );
+    const v3 = found.find((c) => c.type === "recaptcha_v3" && c.websiteKey === "V3_SITEKEY");
+    expect(v3).toBeDefined();
+    expect(v3?.pageAction).toBeUndefined();
   });
 
   it("render=explicit v3 olarak sayılmaz", () => {
@@ -62,5 +62,19 @@ describe("detectCaptchas", () => {
       websiteKey: "K",
       pageAction: "submit",
     });
+  });
+
+  it("Turnstile action'ı pageAction değil turnstileAction olarak eşler", () => {
+    const req = toSolveRequest(
+      { type: "turnstile", websiteKey: "0xAAA", pageAction: "login" },
+      "https://site.com",
+    );
+    expect(req).toEqual({
+      captchaType: "turnstile",
+      websiteURL: "https://site.com",
+      websiteKey: "0xAAA",
+      turnstileAction: "login",
+    });
+    expect(req.pageAction).toBeUndefined();
   });
 });
