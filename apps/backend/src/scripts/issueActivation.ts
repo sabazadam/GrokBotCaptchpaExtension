@@ -1,5 +1,6 @@
 import { loadConfig } from "../config.js";
 import { createPostgresDb, migrate } from "../db/index.js";
+import { createEmbeddedDb } from "../db/embedded.js";
 import { AuthService } from "../auth/deviceAuth.js";
 import { CreditStore } from "../credits/creditStore.js";
 import { buildInstallPrompt } from "../onboarding/installPrompt.js";
@@ -19,7 +20,9 @@ async function main(): Promise<void> {
   const credits = Number(process.argv[3] ?? 0);
 
   const config = loadConfig();
-  const bundle = createPostgresDb(config.databaseUrl);
+  const bundle = config.databaseUrl
+    ? createPostgresDb(config.databaseUrl)
+    : await createEmbeddedDb(config.embeddedDataDir);
   await migrate(bundle);
 
   const auth = new AuthService(bundle.db);

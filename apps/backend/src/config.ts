@@ -41,7 +41,10 @@ export interface ProvidersConfig {
 
 export interface AppConfig {
   capsolver: CapsolverConfig;
-  databaseUrl: string;
+  /** Gerçek PostgreSQL bağlantısı. Boşsa gömülü (pglite) veritabanı kullanılır. */
+  databaseUrl?: string;
+  /** Gömülü veritabanı için disk dizini (DATABASE_URL yoksa). */
+  embeddedDataDir: string;
   port: number;
   limits: LimitsConfig;
   budget: BudgetConfig;
@@ -84,7 +87,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const apiKey = env["CAPSOLVER_API_KEY"];
   if (!apiKey) throw new Error("CAPSOLVER_API_KEY ortam değişkeni gerekli");
   const databaseUrl = env["DATABASE_URL"];
-  if (!databaseUrl) throw new Error("DATABASE_URL ortam değişkeni gerekli");
 
   const capsolver: CapsolverConfig = { apiKey };
   const baseUrl = env["CAPSOLVER_BASE_URL"];
@@ -114,7 +116,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const config: AppConfig = {
     capsolver,
-    databaseUrl,
+    ...(databaseUrl ? { databaseUrl } : {}),
+    embeddedDataDir: env["PGLITE_DATA_DIR"] ?? "./.data/pglite",
     port,
     limits: {
       ratePerMinute: intOr(env["LIMIT_RATE_PER_MINUTE"], 30),

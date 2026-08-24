@@ -11,13 +11,11 @@
     "issue-code": "tsx src/scripts/issueActivation.ts"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.7",
     "@grokbot/shared": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.12.1",
     "postgres": "^3.4.9",
     "zod": "^4.4.3"
-  },
-  "devDependencies": {
-    "@electric-sql/pglite": "^0.5.7"
   }
 }
