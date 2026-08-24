@@ -1,0 +1,21 @@
+{
+  "name": "grokbot-captcha",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Grok botları için güvenli, kredi bazlı CAPTCHA çözme sistemi (Chrome eklentisi + backend)",
+  "type": "module",
+  "packageManager": "pnpm@10.33.3",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
