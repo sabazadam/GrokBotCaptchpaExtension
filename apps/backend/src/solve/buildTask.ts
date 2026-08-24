@@ -74,6 +74,7 @@ export function buildCapsolverTask(req: SolveRequest): CapsolverTask {
         websiteKey: requireField(req.websiteKey, "websiteKey"),
         pageAction: requireField(req.pageAction, "pageAction"),
       };
+      if (req.minScore !== undefined) task["minScore"] = req.minScore;
       if (req.enterprisePayload) task["enterprisePayload"] = req.enterprisePayload;
       if (req.proxy) task["proxy"] = req.proxy;
       return task;

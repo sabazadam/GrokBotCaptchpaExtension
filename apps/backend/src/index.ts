@@ -12,16 +12,12 @@ export { SolveOrchestrator } from "./solve/orchestrator.js";
 export type { OrchestratorDeps } from "./solve/orchestrator.js";
 
 // Çok sağlayıcılı çözüm katmanı
-export { SolverError, toSolverError } from "./providers/types.js";
+export { SolverError, toSolverError, isAbortError } from "./providers/types.js";
 export type { CaptchaSolver, SolverErrorKind } from "./providers/types.js";
 export { TaskApiClient, TaskApiError } from "./providers/taskApiClient.js";
 export type { TaskApiClientOptions } from "./providers/taskApiClient.js";
 export { CapsolverSolver } from "./providers/capsolverSolver.js";
-export {
-  TokenProviderSolver,
-  ANTI_CAPTCHA_CONFIG,
-  TWO_CAPTCHA_CONFIG,
-} from "./providers/tokenProviderSolver.js";
+export { TokenProviderSolver, ANTI_CAPTCHA_CONFIG, TWO_CAPTCHA_CONFIG, snapMinScore } from "./providers/tokenProviderSolver.js";
 export type { TokenProviderConfig, TokenProviderOptions } from "./providers/tokenProviderSolver.js";
 export { FallbackSolver } from "./providers/fallbackSolver.js";
 export type { FallbackSolverOptions } from "./providers/fallbackSolver.js";

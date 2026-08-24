@@ -12,22 +12,55 @@ export interface FallbackSolverOptions {
   attemptTimeoutMs?: number;
 }
 
+/** Aynı sağlayıcıda yeniden denemenin işe yaramayacağı kalıcı hata kodları. */
+const NON_RETRYABLE_CODES = new Set([
+  "ERROR_KEY_DOES_NOT_EXIST",
+  "ERROR_ZERO_BALANCE",
+  "ERROR_IP_NOT_ALLOWED",
+  "ERROR_IP_BLOCKED",
+  "ERROR_IP_BANNED",
+  "ERROR_METHOD_NOT_SUPPORTED",
+  "ERROR_NO_SUCH_METHOD",
+  "ERROR_TASK_NOT_SUPPORTED",
+  "ERROR_WRONG_USER_KEY",
+  "ERROR_KEY_DENIED_ACCESS",
+  "ERROR_KEY_DENIED",
+  "ERROR_ACCOUNT_SUSPENDED",
+  "HTTP_401",
+  "HTTP_403",
+]);
+
+function isNonRetryable(se: SolverError): boolean {
+  if (se.kind === "unsupported" || se.kind === "timeout") return true;
+  const code = (se.code ?? "").toUpperCase();
+  return NON_RETRYABLE_CODES.has(code);
+}
+
+/**
+ * Duvar-saati zaman aşımı: süre dolunca AbortSignal tetiklenir ve Promise reddedilir.
+ * Asılı kalan sağlayıcı çağrıları sinyali dinliyorsa durur; dinlemiyorsa yine de
+ * çağıran taraf beklemeye devam etmez (geç gelen sonuç yok sayılır).
+ */
 function withTimeout<T>(
-  promise: Promise<T>,
+  run: (signal: AbortSignal) => Promise<T>,
   ms: number,
   provider: string,
 ): Promise<T> {
+  const controller = new AbortController();
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
+      controller.abort();
       reject(new SolverError(`${provider} ${ms}ms içinde yanıt vermedi`, "timeout", provider));
     }, ms);
-    promise.then(
+    run(controller.signal).then(
       (value) => {
         clearTimeout(timer);
+        if (controller.signal.aborted) return;
         resolve(value);
       },
       (err) => {
         clearTimeout(timer);
+        if (controller.signal.aborted) return;
         reject(err);
       },
     );
@@ -51,8 +84,8 @@ export class FallbackSolver implements CaptchaSolver {
       throw new Error("FallbackSolver: en az bir sağlayıcı gerekli");
     }
     this.providers = options.providers;
-    this.retries = options.retriesPerProvider ?? 1;
-    this.attemptTimeoutMs = options.attemptTimeoutMs ?? 130_000;
+    this.retries = Math.max(0, options.retriesPerProvider ?? 1);
+    this.attemptTimeoutMs = Math.max(1, options.attemptTimeoutMs ?? 130_000);
     this.logger = options.logger;
   }
 
@@ -60,16 +93,24 @@ export class FallbackSolver implements CaptchaSolver {
     return this.providers.some((p) => p.supports(type));
   }
 
-  async solve(input: SolveRequest): Promise<NormalizedSolution> {
+  async solve(input: SolveRequest, signal?: AbortSignal): Promise<NormalizedSolution> {
     const causes: SolverError[] = [];
 
     for (const provider of this.providers) {
+      if (signal?.aborted) {
+        throw new SolverError("çözüm iptal edildi", "timeout", "fallback");
+      }
       if (!provider.supports(input.captchaType)) continue;
 
       for (let attempt = 1; attempt <= this.retries + 1; attempt++) {
         try {
           const solution = await withTimeout(
-            provider.solve(input),
+            (attemptSignal) => {
+              const combined = signal
+                ? AbortSignal.any([signal, attemptSignal])
+                : attemptSignal;
+              return provider.solve(input, combined);
+            },
             this.attemptTimeoutMs,
             provider.name,
           );
@@ -89,8 +130,9 @@ export class FallbackSolver implements CaptchaSolver {
             kind: se.kind,
             code: se.code,
           });
-          // Desteklenmeyen tür bu sağlayıcıda çözülemez — yeniden deneme, sonraki sağlayıcıya geç.
-          if (se.kind === "unsupported") break;
+          // Desteklenmeyen tür, zaman aşımı ve kalıcı sağlayıcı hatalarında
+          // aynı sağlayıcıyı tekrar denemek yalnızca ek ücret ve gecikme üretir.
+          if (isNonRetryable(se)) break;
         }
       }
     }
@@ -99,11 +141,16 @@ export class FallbackSolver implements CaptchaSolver {
       captchaType: input.captchaType,
       providers: causes.map((c) => c.provider),
     });
+    if (causes.length === 0) {
+      throw new SolverError(
+        `Hiçbir sağlayıcı bu türü desteklemiyor (${input.captchaType})`,
+        "unsupported",
+        "fallback",
+      );
+    }
     throw new SolverError(
       `Tüm sağlayıcılar başarısız oldu (${input.captchaType})`,
-      causes.some((c) => c.kind === "timeout") && causes.every((c) => c.kind === "timeout")
-        ? "timeout"
-        : "error",
+      causes.every((c) => c.kind === "timeout") ? "timeout" : "error",
       "fallback",
       undefined,
       causes,

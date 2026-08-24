@@ -108,4 +108,77 @@ describe("FallbackSolver", () => {
     const res = await fb.solve(req);
     expect(res.token).toBe("B");
   });
+
+  it("zaman aşımında aynı sağlayıcıyı yeniden denemez", async () => {
+    let attempts = 0;
+    const fb = new FallbackSolver({
+      providers: [
+        solverWith("slow", () => {
+          attempts += 1;
+          return new Promise(() => {});
+        }),
+        solverWith("fast", async () => ({ token: "B", raw: {} })),
+      ],
+      retriesPerProvider: 1,
+      attemptTimeoutMs: 20,
+    });
+    const res = await fb.solve(req);
+    expect(res.token).toBe("B");
+    expect(attempts).toBe(1);
+  });
+
+  it("kalıcı hata kodunda aynı sağlayıcıyı yeniden denemez, sonrakine geçer", async () => {
+    let attempts = 0;
+    const fb = new FallbackSolver({
+      providers: [
+        solverWith("p1", async () => {
+          attempts += 1;
+          throw new SolverError("no money", "error", "p1", "ERROR_ZERO_BALANCE");
+        }),
+        solverWith("p2", async () => ({ token: "B", raw: {} })),
+      ],
+      retriesPerProvider: 2,
+    });
+    const res = await fb.solve(req);
+    expect(res.token).toBe("B");
+    expect(attempts).toBe(1);
+  });
+
+  it("hiçbir sağlayıcı desteklemiyorsa unsupported fırlatır", async () => {
+    const fb = new FallbackSolver({
+      providers: [solverWith("p1", async () => ({ token: "A", raw: {} }), () => false)],
+    });
+    try {
+      await fb.solve(req);
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(SolverError);
+      expect((err as SolverError).kind).toBe("unsupported");
+    }
+  });
+
+  it("zaman aşımında AbortSignal gönderir", async () => {
+    let sawAbort = false;
+    const fb = new FallbackSolver({
+      providers: [
+        {
+          name: "slow",
+          supports: () => true,
+          solve: (_input, signal) =>
+            new Promise((_, reject) => {
+              signal?.addEventListener("abort", () => {
+                sawAbort = true;
+                reject(new SolverError("aborted", "timeout", "slow"));
+              });
+            }),
+        },
+        solverWith("fast", async () => ({ token: "B", raw: {} })),
+      ],
+      retriesPerProvider: 0,
+      attemptTimeoutMs: 20,
+    });
+    const res = await fb.solve(req);
+    expect(res.token).toBe("B");
+    expect(sawAbort).toBe(true);
+  });
 });

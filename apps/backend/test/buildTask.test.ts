@@ -60,6 +60,18 @@ describe("buildCapsolverTask", () => {
     ).toThrowError(BuildTaskError);
   });
 
+  it("reCAPTCHA v3 minScore task gövdesine eklenir", () => {
+    const task = buildCapsolverTask({
+      captchaType: "recaptcha_v3",
+      websiteURL: "https://example.com",
+      websiteKey: "k",
+      pageAction: "login",
+      minScore: 0.7,
+    });
+    expect(task["pageAction"]).toBe("login");
+    expect(task["minScore"]).toBe(0.7);
+  });
+
   it("Turnstile metadata action/cdata ekler", () => {
     const task = buildCapsolverTask({
       captchaType: "turnstile",

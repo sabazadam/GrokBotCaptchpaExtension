@@ -102,14 +102,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   };
 
   const providers: ProvidersConfig = {
-    attemptTimeoutMs: intOr(env["SOLVER_ATTEMPT_TIMEOUT_MS"], 130_000),
-    retriesPerProvider: intOr(env["SOLVER_RETRIES_PER_PROVIDER"], 1),
-    tokenPollIntervalMs: intOr(env["SOLVER_TOKEN_POLL_INTERVAL_MS"], 3_000),
-    tokenTimeoutMs: intOr(env["SOLVER_TOKEN_TIMEOUT_MS"], 120_000),
+    attemptTimeoutMs: Math.max(1_000, intOr(env["SOLVER_ATTEMPT_TIMEOUT_MS"], 130_000)),
+    retriesPerProvider: Math.max(0, intOr(env["SOLVER_RETRIES_PER_PROVIDER"], 1)),
+    tokenPollIntervalMs: Math.max(200, intOr(env["SOLVER_TOKEN_POLL_INTERVAL_MS"], 3_000)),
+    tokenTimeoutMs: Math.max(1_000, intOr(env["SOLVER_TOKEN_TIMEOUT_MS"], 120_000)),
   };
-  const anticaptchaApiKey = env["ANTICAPTCHA_API_KEY"];
+  const anticaptchaApiKey = env["ANTICAPTCHA_API_KEY"]?.trim();
   if (anticaptchaApiKey) providers.anticaptchaApiKey = anticaptchaApiKey;
-  const twocaptchaApiKey = env["TWOCAPTCHA_API_KEY"];
+  const twocaptchaApiKey = env["TWOCAPTCHA_API_KEY"]?.trim();
   if (twocaptchaApiKey) providers.twocaptchaApiKey = twocaptchaApiKey;
 
   const config: AppConfig = {
