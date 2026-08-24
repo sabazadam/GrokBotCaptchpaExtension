@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Grok Bot CAPTCHA Solver",
+  "version": "0.1.0",
+  "description": "Grok botları için otomatik CAPTCHA çözme (kredi bazlı, güvenli backend üzerinden).",
+  "permissions": ["storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Grok CAPTCHA Çözücü"
+  }
+}
