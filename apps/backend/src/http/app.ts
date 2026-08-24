@@ -6,6 +6,8 @@ import { AuthError } from "../auth/deviceAuth.js";
 import type { CreditStore } from "../credits/creditStore.js";
 import type { SolveOrchestrator } from "../solve/orchestrator.js";
 import type { LemonSqueezyWebhookService } from "../payments/lemonSqueezy.js";
+import type { Metrics } from "../observability/metrics.js";
+import type { Logger } from "../observability/logger.js";
 import { buildInstallPrompt } from "../onboarding/installPrompt.js";
 import {
   activateRequestSchema,
@@ -27,6 +29,8 @@ export interface AppDeps {
   /** Admin uçlarını korur (x-admin-token). Ayarlanmazsa admin uçları kapalıdır. */
   adminToken?: string;
   onboarding?: OnboardingConfig;
+  metrics?: Metrics;
+  appLogger?: Logger;
   logger?: boolean;
 }
 
@@ -111,7 +115,30 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return ctx;
   }
 
+  app.setErrorHandler((err: Error, _req, reply) => {
+    deps.appLogger?.error("unhandled_route_error", { message: err.message, stack: err.stack });
+    deps.metrics?.recordError("internal_error");
+    void reply
+      .code(500)
+      .send({ status: "error", code: "internal_error", message: "İç sunucu hatası" });
+  });
+
   app.get("/health", async () => ({ status: "ok" }));
+
+  if (deps.metrics) {
+    const metrics = deps.metrics;
+    app.get("/metrics", async (req, reply) => {
+      if (deps.adminToken) {
+        const header = req.headers["x-admin-token"];
+        if (typeof header !== "string" || !safeEqual(header, deps.adminToken)) {
+          return reply
+            .code(401)
+            .send({ status: "error", code: "unauthorized", message: "Admin token gerekli" });
+        }
+      }
+      return reply.code(200).send(metrics.snapshot());
+    });
+  }
 
   app.post("/v1/activate", async (req, reply) => {
     const parsed = activateRequestSchema.safeParse(req.body);

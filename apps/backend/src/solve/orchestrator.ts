@@ -14,6 +14,8 @@ import type { UserLimiter } from "../limits/rateLimiter.js";
 import type { BudgetCircuitBreaker } from "../limits/budgetBreaker.js";
 import { CapsolverClient, CapsolverError } from "../capsolver/client.js";
 import type { CapsolverTask } from "../capsolver/types.js";
+import type { Logger } from "../observability/logger.js";
+import type { Metrics } from "../observability/metrics.js";
 import { buildCapsolverTask, BuildTaskError } from "./buildTask.js";
 import { normalizeSolution } from "./solveService.js";
 
@@ -25,7 +27,8 @@ export interface OrchestratorDeps {
   client: CapsolverClient;
   /** Tür bazlı kredi maliyeti (varsayılan DEFAULT_CREDIT_COSTS). */
   creditCosts?: Record<CaptchaTypeId, number>;
-  logger?: (event: Record<string, unknown>) => void;
+  logger?: Logger;
+  metrics?: Metrics;
 }
 
 interface AuthedContext {
@@ -49,10 +52,6 @@ export class SolveOrchestrator {
 
   constructor(private readonly deps: OrchestratorDeps) {
     this.costs = deps.creditCosts ?? DEFAULT_CREDIT_COSTS;
-  }
-
-  private log(event: Record<string, unknown>): void {
-    this.deps.logger?.(event);
   }
 
   private cost(type: CaptchaTypeId): number {
@@ -85,7 +84,12 @@ export class SolveOrchestrator {
       task = buildCapsolverTask(req);
     } catch (err) {
       const { code, message } = mapError(err);
-      this.log({ event: "solve_invalid", userId: ctx.userId, captchaType: req.captchaType, code });
+      this.deps.logger?.warn("solve_invalid", {
+        userId: ctx.userId,
+        captchaType: req.captchaType,
+        code,
+      });
+      this.deps.metrics?.recordError(code);
       return { status: "error", code, message };
     }
 
@@ -141,7 +145,8 @@ export class SolveOrchestrator {
     const acq = this.deps.limiter.acquire(ctx.userId);
     if (!acq.ok) {
       await this.markFailed(solveId);
-      this.log({ event: "solve_limited", userId: ctx.userId, code: acq.code });
+      this.deps.logger?.warn("solve_limited", { userId: ctx.userId, code: acq.code });
+      this.deps.metrics?.recordError(acq.code);
       return { status: "error", code: acq.code, message: "Limit aşıldı" };
     }
 
@@ -149,7 +154,8 @@ export class SolveOrchestrator {
       // 3) Global bütçe kesici.
       if (!this.deps.breaker.canSpend(cost)) {
         await this.markFailed(solveId);
-        this.log({ event: "budget_open", userId: ctx.userId });
+        this.deps.logger?.warn("budget_open", { userId: ctx.userId });
+        this.deps.metrics?.recordError("budget_circuit_open");
         return {
           status: "error",
           code: "budget_circuit_open",
@@ -161,7 +167,8 @@ export class SolveOrchestrator {
       const reserve = await this.deps.credits.reserve(ctx.userId, cost);
       if (!reserve.ok) {
         await this.markFailed(solveId);
-        this.log({ event: "insufficient_credits", userId: ctx.userId });
+        this.deps.logger?.info("insufficient_credits", { userId: ctx.userId });
+        this.deps.metrics?.recordError("insufficient_credits");
         return { status: "error", code: "insufficient_credits", message: "Yetersiz kredi" };
       }
 
@@ -175,7 +182,12 @@ export class SolveOrchestrator {
           .update(solves)
           .set({ status: "solved", solution, resolvedAt: sql`now()` })
           .where(eq(solves.id, solveId));
-        this.log({ event: "solve_ok", userId: ctx.userId, captchaType: req.captchaType, cost });
+        this.deps.logger?.info("solve_ok", {
+          userId: ctx.userId,
+          captchaType: req.captchaType,
+          cost,
+        });
+        this.deps.metrics?.recordSolve(req.captchaType, "solved", cost);
         return {
           status: "solved",
           solveId,
@@ -188,7 +200,9 @@ export class SolveOrchestrator {
         const remaining = await this.deps.credits.refund(ctx.userId, cost, solveId);
         await this.markFailed(solveId);
         const { code, message } = mapError(err);
-        this.log({ event: "solve_failed", userId: ctx.userId, code, remaining });
+        this.deps.logger?.warn("solve_failed", { userId: ctx.userId, code, remaining });
+        this.deps.metrics?.recordSolve(req.captchaType, "failed", cost);
+        this.deps.metrics?.recordError(code);
         return { status: "error", code, message };
       }
     } finally {

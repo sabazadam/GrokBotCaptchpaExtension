@@ -7,10 +7,15 @@ import { BudgetCircuitBreaker } from "./limits/budgetBreaker.js";
 import { CapsolverClient } from "./capsolver/client.js";
 import { SolveOrchestrator } from "./solve/orchestrator.js";
 import { LemonSqueezyWebhookService } from "./payments/lemonSqueezy.js";
+import { createLogger } from "./observability/logger.js";
+import { Metrics } from "./observability/metrics.js";
 import { buildApp } from "./http/app.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  const logger = createLogger({ base: { service: "grokbot-backend" } });
+  const metrics = new Metrics();
+
   const bundle = createPostgresDb(config.databaseUrl);
   await migrate(bundle);
 
@@ -21,7 +26,12 @@ async function main(): Promise<void> {
     maxConcurrent: config.limits.maxConcurrent,
     dailyMax: config.limits.dailyMax,
   });
-  const breaker = new BudgetCircuitBreaker(config.budget.windowMs, config.budget.maxSpend);
+  const breaker = new BudgetCircuitBreaker(config.budget.windowMs, config.budget.maxSpend, {
+    warnRatio: 0.8,
+    onWarn: (spend, maxSpend) => {
+      logger.warn("budget_spend_warning", { spend, maxSpend });
+    },
+  });
   const client = new CapsolverClient({
     apiKey: config.capsolver.apiKey,
     ...(config.capsolver.baseUrl ? { baseUrl: config.capsolver.baseUrl } : {}),
@@ -36,9 +46,8 @@ async function main(): Promise<void> {
     limiter,
     breaker,
     client,
-    logger: (event) => {
-      process.stdout.write(`${JSON.stringify({ ts: Date.now(), ...event })}\n`);
-    },
+    logger,
+    metrics,
   });
 
   const lemonSqueezy = config.lemonSqueezy
@@ -55,10 +64,20 @@ async function main(): Promise<void> {
     ...(lemonSqueezy ? { lemonSqueezy } : {}),
     ...(config.adminToken ? { adminToken: config.adminToken } : {}),
     onboarding: config.onboarding,
+    metrics,
+    appLogger: logger,
     logger: true,
   });
 
+  process.on("unhandledRejection", (reason) => {
+    logger.error("unhandled_rejection", { reason: String(reason) });
+  });
+  process.on("uncaughtException", (err) => {
+    logger.error("uncaught_exception", { message: err.message, stack: err.stack });
+  });
+
   const shutdown = async (): Promise<void> => {
+    logger.info("shutdown");
     await app.close();
     await bundle.close();
     process.exit(0);
@@ -67,6 +86,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", shutdown);
 
   await app.listen({ port: config.port, host: "0.0.0.0" });
+  logger.info("listening", { port: config.port });
 }
 
 main().catch((err) => {
