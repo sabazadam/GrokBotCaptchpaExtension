@@ -66,6 +66,26 @@ describe("buildCapsolverTask", () => {
     ).toThrowError(BuildTaskError);
   });
 
+  it("reCAPTCHA v3 pageAction verilince task'e yazılır", () => {
+    const task = buildCapsolverTask({
+      captchaType: "recaptcha_v3",
+      websiteURL: "https://example.com",
+      websiteKey: "k",
+      pageAction: "login",
+    });
+    expect(task["pageAction"]).toBe("login");
+  });
+
+  it("boş websiteKey geçersizdir", () => {
+    expect(() =>
+      buildCapsolverTask({
+        captchaType: "recaptcha_v2",
+        websiteURL: "https://example.com",
+        websiteKey: "",
+      }),
+    ).toThrowError(BuildTaskError);
+  });
+
   it("Turnstile metadata action/cdata ekler", () => {
     const task = buildCapsolverTask({
       captchaType: "turnstile",
@@ -93,6 +113,16 @@ describe("buildCapsolverTask", () => {
     expect(() =>
       buildCapsolverTask({ captchaType: "geetest", websiteURL: "https://example.com" }),
     ).toThrowError(BuildTaskError);
+  });
+
+  it("GeeTest v4 captchaId ile kurulur", () => {
+    const task = buildCapsolverTask({
+      captchaType: "geetest",
+      websiteURL: "https://example.com",
+      geetest: { captchaId: "CID-1" },
+    });
+    expect(task.type).toBe("GeeTestTaskProxyLess");
+    expect(task["captchaId"]).toBe("CID-1");
   });
 
   it("ImageToText body ister", () => {

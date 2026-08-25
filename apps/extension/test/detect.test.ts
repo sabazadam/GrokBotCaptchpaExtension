@@ -51,6 +51,27 @@ describe("detectCaptchas", () => {
     expect(found.some((c) => c.type === "recaptcha_v3")).toBe(false);
   });
 
+  it("aynı sitekey'i iki kez eklemez", () => {
+    document.body.innerHTML =
+      '<div class="g-recaptcha" data-sitekey="DUP"></div><div class="g-recaptcha" data-sitekey="DUP"></div>';
+    const found = detectCaptchas(document);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.websiteKey).toBe("DUP");
+  });
+
+  it("k parametresi olmayan recaptcha iframe'ini yok sayar", () => {
+    document.body.innerHTML =
+      '<iframe src="https://www.google.com/recaptcha/api2/anchor?ar=1"></iframe>';
+    expect(detectCaptchas(document).some((c) => c.type === "recaptcha_v2")).toBe(false);
+  });
+
+  it("toSolveRequest opsiyonel alanları atlar", () => {
+    const req = toSolveRequest({ type: "turnstile" }, "https://site.com");
+    expect(req).toEqual({ captchaType: "turnstile", websiteURL: "https://site.com" });
+    expect(req).not.toHaveProperty("websiteKey");
+    expect(req).not.toHaveProperty("pageAction");
+  });
+
   it("toSolveRequest alanları doğru eşler", () => {
     const req = toSolveRequest(
       { type: "recaptcha_v3", websiteKey: "K", pageAction: "submit" },

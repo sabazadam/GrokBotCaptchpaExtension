@@ -53,6 +53,31 @@ describe("TokenProviderSolver (Anti-Captcha)", () => {
     expect(solution.token).toBe("GTOKEN");
   });
 
+  it("reCAPTCHA v3 özel minScore'u iletir", async () => {
+    const cap = capturingFetch({ gRecaptchaResponse: "GTOKEN" });
+    const solver = new TokenProviderSolver(ANTI_CAPTCHA_CONFIG, {
+      apiKey: "k",
+      fetchImpl: cap.fetchImpl,
+      sleepImpl: noopSleep,
+      pollIntervalMs: 1,
+    });
+    await solver.solve({
+      captchaType: "recaptcha_v3",
+      websiteURL: "https://site.com",
+      websiteKey: "6Lc",
+      minScore: 0.9,
+    });
+    expect(cap.lastTask()["minScore"]).toBe(0.9);
+    expect(cap.lastTask()["pageAction"]).toBeUndefined();
+  });
+
+  it("websiteKey yoksa SolverError(unsupported) fırlatır", async () => {
+    const solver = new TokenProviderSolver(ANTI_CAPTCHA_CONFIG, { apiKey: "k" });
+    await expect(
+      solver.solve({ captchaType: "recaptcha_v2", websiteURL: "https://site.com" }),
+    ).rejects.toMatchObject({ name: "SolverError", kind: "unsupported" });
+  });
+
   it("reCAPTCHA v3 minScore ve pageAction ile kurar (varsayılan 0.3)", async () => {
     const cap = capturingFetch({ gRecaptchaResponse: "GTOKEN" });
     const solver = new TokenProviderSolver(ANTI_CAPTCHA_CONFIG, {

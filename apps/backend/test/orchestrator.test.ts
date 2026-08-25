@@ -134,4 +134,33 @@ describe("SolveOrchestrator", () => {
     if (second.status === "error") expect(second.code).toBe("daily_limit");
     expect(await credits.getBalance(userId)).toBe(9);
   });
+
+  it("başarısız idempotent istek aynı anahtarla yeniden denenebilir ve tek kez ücretlenir", async () => {
+    await credits.topUp(userId, 10, null);
+    const req: SolveRequest = { ...recaptchaReq, idempotencyKey: "retry-1" };
+    const failed = await makeOrchestrator({ solver: failingSolver() }).handleSolve(
+      { userId, deviceId },
+      req,
+    );
+    expect(failed.status).toBe("error");
+    expect(await credits.getBalance(userId)).toBe(10);
+
+    const retried = await makeOrchestrator({ solver: successSolver() }).handleSolve(
+      { userId, deviceId },
+      req,
+    );
+    expect(retried.status).toBe("solved");
+    expect(await credits.getBalance(userId)).toBe(9);
+  });
+
+  it("sağlayıcı timeout'unu capsolver_timeout olarak eşler ve iade eder", async () => {
+    await credits.topUp(userId, 10, null);
+    const res = await makeOrchestrator({ solver: failingSolver("timeout") }).handleSolve(
+      { userId, deviceId },
+      recaptchaReq,
+    );
+    expect(res.status).toBe("error");
+    if (res.status === "error") expect(res.code).toBe("capsolver_timeout");
+    expect(await credits.getBalance(userId)).toBe(10);
+  });
 });

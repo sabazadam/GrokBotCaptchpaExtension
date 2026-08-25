@@ -18,6 +18,31 @@ function solverWith(
 }
 
 describe("FallbackSolver", () => {
+  it("sağlayıcısız kurulamaz", () => {
+    expect(() => new FallbackSolver({ providers: [] })).toThrow(/en az bir sağlayıcı/);
+  });
+
+  it("tüm denemeler timeout ise kind=timeout döner", async () => {
+    const fb = new FallbackSolver({
+      providers: [
+        solverWith("p1", async () => {
+          throw new SolverError("t1", "timeout", "p1");
+        }),
+        solverWith("p2", async () => {
+          throw new SolverError("t2", "timeout", "p2");
+        }),
+      ],
+      retriesPerProvider: 0,
+    });
+    try {
+      await fb.solve(req);
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(SolverError);
+      expect((err as SolverError).kind).toBe("timeout");
+    }
+  });
+
   it("birincil başarılıysa onu döner, diğerini çağırmaz", async () => {
     const secondary = vi.fn(async (): Promise<NormalizedSolution> => ({ token: "B", raw: {} }));
     const fb = new FallbackSolver({
