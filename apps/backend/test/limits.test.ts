@@ -47,6 +47,44 @@ describe("UserLimiter", () => {
     expect(limiter.acquire("u1").ok).toBe(true);
     expect(limiter.acquire("u2").ok).toBe(true);
   });
+
+  it("UTC gün değişince günlük sayaç sıfırlanır", () => {
+    const limiter = new UserLimiter({ ratePerMinute: 1000, maxConcurrent: 100, dailyMax: 1 });
+    const day1 = Date.parse("2026-01-01T23:59:00.000Z");
+    const day2 = Date.parse("2026-01-02T00:00:01.000Z");
+    const first = limiter.acquire("u", day1);
+    expect(first.ok).toBe(true);
+    if (first.ok) first.release();
+    const sameDay = limiter.acquire("u", day1);
+    expect(sameDay.ok).toBe(false);
+    if (!sameDay.ok) expect(sameDay.code).toBe("daily_limit");
+    expect(limiter.acquire("u", day2).ok).toBe(true);
+  });
+
+  it("burst tükendikten sonra zamanla refill olur", () => {
+    const limiter = new UserLimiter({
+      ratePerMinute: 60,
+      burst: 1,
+      maxConcurrent: 100,
+      dailyMax: 1000,
+    });
+    const now = 1_000_000;
+    expect(limiter.acquire("u", now).ok).toBe(true);
+    expect(limiter.acquire("u", now).ok).toBe(false);
+    expect(limiter.acquire("u", now + 1_000).ok).toBe(true);
+  });
+
+  it("release iki kez çağrılınca eşzamanlılık negatif olmaz", () => {
+    const limiter = new UserLimiter({ ratePerMinute: 1000, maxConcurrent: 1, dailyMax: 1000 });
+    const a = limiter.acquire("u");
+    expect(a.ok).toBe(true);
+    if (a.ok) {
+      a.release();
+      a.release();
+    }
+    expect(limiter.acquire("u").ok).toBe(true);
+    expect(limiter.acquire("u").ok).toBe(false);
+  });
 });
 
 describe("BudgetCircuitBreaker", () => {
@@ -65,5 +103,12 @@ describe("BudgetCircuitBreaker", () => {
     expect(b.isOpen(1_000_000)).toBe(true);
     expect(b.currentSpend(1_000_000 + 60_001)).toBe(0);
     expect(b.canSpend(5, 1_000_000 + 60_001)).toBe(true);
+  });
+
+  it("sıfır/negatif maliyet kaydı harcamayı artırmaz", () => {
+    const b = new BudgetCircuitBreaker(60_000, 5);
+    b.record(0, 1_000_000);
+    b.record(-2, 1_000_000);
+    expect(b.currentSpend(1_000_000)).toBe(0);
   });
 });

@@ -65,6 +65,25 @@ describe("admin uçları", () => {
     expect(body.installPrompt).toContain("https://api.example.com");
   });
 
+  it("geçersiz e-posta veya sıfır kredi -> 400", async () => {
+    const badEmail = await app.inject({
+      method: "POST",
+      url: "/admin/credits",
+      headers: { "x-admin-token": ADMIN },
+      payload: { email: "not-an-email", credits: 10 },
+    });
+    expect(badEmail.statusCode).toBe(400);
+    expect(badEmail.json().code).toBe("invalid_params");
+
+    const zero = await app.inject({
+      method: "POST",
+      url: "/admin/credits",
+      headers: { "x-admin-token": ADMIN },
+      payload: { email: "a@b.com", credits: 0 },
+    });
+    expect(zero.statusCode).toBe(400);
+  });
+
   it("kredi yükler", async () => {
     const res = await app.inject({
       method: "POST",

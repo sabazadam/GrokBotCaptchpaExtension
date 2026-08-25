@@ -56,6 +56,19 @@ describe("LemonSqueezyWebhookService", () => {
     expect(result.code).toBe("invalid_signature");
   });
 
+  it("imza yoksa reddedilir", async () => {
+    const result = await service.handle(Buffer.from("{}"), undefined);
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("invalid_signature");
+  });
+
+  it("imzalı ama geçersiz JSON reddedilir", async () => {
+    const raw = "not-json";
+    const result = await service.handle(Buffer.from(raw), sign(raw));
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("invalid_json");
+  });
+
   it("aynı olay iki kez işlenmez (idempotency)", async () => {
     const userId = await auth.provisionUser("pay@test.com");
     const raw = JSON.stringify({

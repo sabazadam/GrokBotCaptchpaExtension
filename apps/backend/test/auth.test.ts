@@ -58,4 +58,9 @@ describe("AuthService", () => {
     const code = await auth.issueActivationCode(userId, -1);
     await expect(auth.redeemActivationCode(code)).rejects.toBeInstanceOf(AuthError);
   });
+
+  it("boş veya uydurma token authenticate null döner", async () => {
+    expect(await auth.authenticate("")).toBeNull();
+    expect(await auth.authenticate("not-a-real-token")).toBeNull();
+  });
 });

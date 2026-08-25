@@ -104,4 +104,66 @@ describe("HTTP app", () => {
     expect(solved.json().status).toBe("solved");
     expect(solved.json().remainingCredits).toBe(4);
   });
+
+  it("reCAPTCHA v3 pageAction olmadan çözülebilir", async () => {
+    const token = await activate();
+    const ctx = await auth.authenticate(token);
+    await credits.topUp(ctx!.userId, 5, null);
+    const solved = await app.inject({
+      method: "POST",
+      url: "/v1/solve",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { captchaType: "recaptcha_v3", websiteURL: "https://e.com", websiteKey: "k" },
+    });
+    expect(solved.statusCode).toBe(200);
+    expect(solved.json().status).toBe("solved");
+  });
+
+  it("geçersiz minScore -> 400 invalid_params", async () => {
+    const token = await activate();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/solve",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        captchaType: "recaptcha_v3",
+        websiteURL: "https://e.com",
+        websiteKey: "k",
+        minScore: 1.5,
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("invalid_params");
+  });
+
+  it("bilinmeyen captchaType -> 400", async () => {
+    const token = await activate();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/solve",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { captchaType: "hcaptcha", websiteURL: "https://e.com", websiteKey: "k" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("invalid_params");
+  });
+
+  it("boş aktivasyon gövdesi -> 400", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/activate",
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("invalid_params");
+  });
+
+  it("geçersiz Authorization şeması -> 401", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/balance",
+      headers: { authorization: "Token not-bearer" },
+    });
+    expect(res.statusCode).toBe(401);
+  });
 });
