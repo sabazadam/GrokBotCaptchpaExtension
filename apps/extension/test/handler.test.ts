@@ -31,6 +31,18 @@ describe("handleMessage", () => {
     expect(reply.remainingCredits).toBe(7);
   });
 
+  it("status: bakiye isteği başarısızsa kredi null kalır", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("network down");
+      }),
+    );
+    const reply = (await handleMessage({ kind: "status" }, enabledWithToken)) as StatusReply;
+    expect(reply.hasToken).toBe(true);
+    expect(reply.remainingCredits).toBeNull();
+  });
+
   it("status: token yoksa kredi null", async () => {
     const reply = (await handleMessage(
       { kind: "status" },
